@@ -124,6 +124,26 @@ test("does not transmit profile inputs or retain them after reloading", async ({
   expect(requests.some((request) => request.includes(marker))).toBe(false);
 });
 
+test("checks Skilled Worker evidence and keeps full UK eligibility pending", async ({ page }) => {
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
+  await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledAge").fill("18");
+  await answer("ukSkilledJobCos").selectOption("no");
+  await answer("ukSkilledSponsorRated").selectOption("yes");
+
+  const results = await checkProfile(page);
+  const skilledWorker = results.locator('[data-route-id="uk-skilled-worker"]');
+  await expect(skilledWorker.getByText("Gaps in checked requirements", { exact: true })).toBeVisible();
+  await expect(skilledWorker.getByText("Information still needed", { exact: true })).toBeVisible();
+  await answer("ukSkilledJobCos").selectOption("yes");
+  await answer("ukSkilledEnglishBasis").selectOption("other-verified-evidence");
+  await checkProfile(page);
+  await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(skilledWorker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+});
+
 test.describe("mobile viewport", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -162,5 +182,30 @@ test.describe("mobile viewport", () => {
     await page.addStyleTag({ content: ".primary-nav, .footer-inner { font-family: monospace; }" });
     await expectNoOverflow();
     expect(pageErrors).toEqual([]);
+  });
+
+  test("shows the Singapore salary threshold only when its selection criteria are known", async ({ page }) => {
+    await openEnglish(page);
+    await page.getByLabel("Main goal").selectOption("skilled-work");
+    const answer = (name: string) => page.locator(`#question-sg-employment-pass-${name}`);
+    await answer("sgEpInitialApplication").selectOption("yes");
+    await answer("sgEpSingaporeJobOffer").selectOption("yes");
+    await answer("sgEpAge").fill("30");
+    await answer("sgEpFixedMonthlySalarySgd").fill("7981.99");
+    const results = await checkProfile(page);
+    const employmentPass = results.locator('[data-route-id="sg-employment-pass"]');
+    await expect(employmentPass.getByText("More information needed", { exact: true })).toBeVisible();
+    await expect(employmentPass.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
+
+    await answer("sgEpFinancialSector").selectOption("yes");
+    await checkProfile(page);
+    await expect(employmentPass.getByText(/7,982/)).toBeVisible();
+    await expect(employmentPass.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+
+    await answer("sgEpFixedMonthlySalarySgd").fill("7982");
+    await checkProfile(page);
+    await expect(employmentPass.getByText("All checked conditions met", { exact: true })).toBeVisible();
+    await expect(employmentPass.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+    await expect(employmentPass.getByText(/Asia\/Singapore/)).toBeVisible();
   });
 });

@@ -74,6 +74,7 @@ type CheckRow = {
   status?: CheckStatus;
   role?: CheckRole;
   score?: { earned: number; possible: number; minimum: number };
+  threshold?: { minimum: number | null; unit: Localized };
 };
 
 function SourceDetails({ source, language }: { source: RuleSource; language: Language }) {
@@ -108,7 +109,7 @@ function ConditionList({ rows, language, showActions = true }: {
 }) {
   return (
     <ul className="conditions">
-      {rows.map(({ id, label, nextStep, source, status, role, score }) => (
+      {rows.map(({ id, label, nextStep, source, status, role, score, threshold }) => (
         <li key={id} className="condition">
           <div className="condition-heading">
             <strong>{label[language]}</strong>
@@ -122,6 +123,11 @@ function ConditionList({ rows, language, showActions = true }: {
               <div><dt>{copy.earnedPoints[language]}</dt><dd>{score.earned}</dd></div>
               <div><dt>{copy.possiblePoints[language]}</dt><dd>{score.possible}</dd></div>
               <div><dt>{copy.neededPoints[language]}</dt><dd>{score.minimum}</dd></div>
+            </dl>
+          )}
+          {threshold?.minimum != null && (
+            <dl className="points-breakdown">
+              <div><dt>{copy.minimumForCase[language]}</dt><dd>{threshold.minimum.toLocaleString(language)} {threshold.unit[language]}</dd></div>
             </dl>
           )}
           {showActions && status && status !== "pass" && status !== "not-applicable" && (
@@ -143,6 +149,7 @@ function ResultChecks({ evaluation, language }: { evaluation: Evaluation; langua
       role: score.role,
       score: { earned: score.earned, possible: score.possible, minimum: score.minimum },
     })),
+    ...(evaluation.thresholds ?? []).map((threshold) => ({ ...threshold, threshold })),
   ];
   const sections = [
     { type: "met", title: copy.checkedMet, rows: [] as CheckRow[] },

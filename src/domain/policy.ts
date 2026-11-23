@@ -59,6 +59,21 @@ export type ScoreCategory = Readonly<{
   alternatives: readonly Readonly<{ points: PointRange; when: RuleExpression }>[];
 }>;
 
+type ThresholdTable = Readonly<RuleSummary & {
+  kind: "threshold-table";
+  input: ConditionInput;
+  bandInput: ConditionInput;
+  categoryInput: ConditionInput;
+  bandStarts: readonly number[];
+  maximumBandInput: number;
+  categories: readonly Readonly<{
+    value: boolean | string;
+    minimums: readonly number[];
+  }>[];
+  unit: Localized;
+  source: RuleSource;
+}>;
+
 export type RuleExpression =
   | Readonly<{ kind: "condition"; conditionId: string }>
   | Readonly<{ kind: "all" | "any"; children: readonly RuleExpression[]; summary?: RuleSummary }>
@@ -68,7 +83,8 @@ export type RuleExpression =
     source: RuleSource;
     minimum: number;
     categories: readonly ScoreCategory[];
-  }>;
+  }>
+  | ThresholdTable;
 
 export type Policy = Readonly<{
   id: string;
@@ -111,12 +127,21 @@ export type EvaluatedScore = Readonly<RuleSummary & {
   possible: number;
 }>;
 
+export type EvaluatedThreshold = Readonly<RuleSummary & {
+  status: ConditionStatus;
+  role: ConditionRole;
+  source: RuleSource;
+  unit: Localized;
+  minimum: number | null;
+}>;
+
 type EvaluatedExpression = Readonly<{
   kind: RuleExpression["kind"];
   status: ExpressionStatus;
   conditionId?: string;
   groupId?: string;
   scoreId?: string;
+  thresholdId?: string;
   children?: readonly EvaluatedExpression[];
 }>;
 
@@ -129,6 +154,7 @@ export type Evaluation = Readonly<{
   expression?: EvaluatedExpression;
   groups?: readonly EvaluatedRuleGroup[];
   scores?: readonly EvaluatedScore[];
+  thresholds?: readonly EvaluatedThreshold[];
 }>;
 
 export type PathwayEvaluation = Readonly<{
@@ -237,6 +263,22 @@ function isPointValue(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
+function isUsableThresholdTable(table: ThresholdTable, asOf: string): boolean {
+  const { categories, bandStarts, maximumBandInput } = table;
+  return isCurrentSource(table.source, asOf) &&
+    new Set([table.input, table.bandInput, table.categoryInput]).size === 3 &&
+    isPointValue(maximumBandInput) &&
+    bandStarts.length > 0 &&
+    bandStarts.every((start, index) => isPointValue(start) && start <= maximumBandInput &&
+      (index === 0 || start > bandStarts[index - 1])) &&
+    categories.length > 0 &&
+    new Set(categories.map(({ value }) => value)).size === categories.length &&
+    categories.every(({ value, minimums }) =>
+      (typeof value === "boolean" || (typeof value === "string" && value.trim() !== "")) &&
+      minimums.length === bandStarts.length &&
+      minimums.every((minimum) => Number.isFinite(minimum) && minimum >= 0 && minimum <= Number.MAX_SAFE_INTEGER));
+}
+
 function isUsableExpression(
   expression: RuleExpression,
   conditions: ReadonlyMap<string, Condition>,
@@ -253,6 +295,8 @@ function isUsableExpression(
     case "unless":
       return isUsableExpression(expression.test, conditions, asOf) &&
         isUsableExpression(expression.requirement, conditions, asOf);
+    case "threshold-table":
+      return isUsableThresholdTable(expression, asOf);
     case "points":
       return isPointValue(expression.minimum) && expression.minimum > 0 &&
         isCurrentSource(expression.source, asOf) &&
@@ -275,6 +319,7 @@ type ExpressionContext = {
   checks: Map<string, EvaluatedCondition>;
   groups: EvaluatedRuleGroup[];
   scores: EvaluatedScore[];
+  thresholds: EvaluatedThreshold[];
 };
 
 const rolePriority: Readonly<Record<ConditionRole, number>> = {
@@ -326,6 +371,31 @@ function evaluatePoints(
   return { kind: "points", scoreId: id, status, children };
 }
 
+function evaluateThreshold(
+  expression: ThresholdTable,
+  context: ExpressionContext,
+  role: ConditionRole,
+): EvaluatedExpression {
+  const bandAnswer = getAnswer(context.profile, expression.bandInput);
+  const categoryAnswer = getAnswer(context.profile, expression.categoryInput);
+  const amount = getAnswer(context.profile, expression.input);
+  const category = expression.categories.find(({ value }) => value === categoryAnswer);
+  let minimum: number | null = null;
+
+  if (typeof bandAnswer === "number" && isPointValue(bandAnswer) && bandAnswer <= expression.maximumBandInput && category) {
+    const band = expression.bandStarts.findLastIndex((start) => start <= bandAnswer);
+    minimum = category.minimums[band] ?? null;
+  }
+
+  const status = minimum === null || typeof amount !== "number" || !Number.isFinite(amount) ||
+    amount < 0 || amount > Number.MAX_SAFE_INTEGER
+    ? "unknown"
+    : amount >= minimum ? "pass" : "fail";
+  const { id, label, nextStep, source, unit } = expression;
+  context.thresholds.push({ id, label, nextStep, source, unit, role, minimum, status });
+  return { kind: "threshold-table", thresholdId: id, status };
+}
+
 function evaluateExpression(
   expression: RuleExpression,
   context: ExpressionContext,
@@ -368,6 +438,8 @@ function evaluateExpression(
     }
     case "points":
       return evaluatePoints(expression, context, role);
+    case "threshold-table":
+      return evaluateThreshold(expression, context, role);
   }
 }
 
@@ -391,6 +463,36 @@ const expressionOutcomes: Readonly<Record<ExpressionStatus, EvaluationStatus>> =
   "not-applicable": "conditions-not-applicable",
 };
 
+/** List the declared profile inputs, including selectors inside expression nodes. */
+export function policyInputs(policy: Policy): readonly ConditionInput[] {
+  const inputs = new Set(policy.conditions.map(({ input }) => input));
+
+  function collect(expression: RuleExpression): void {
+    switch (expression.kind) {
+      case "condition":
+        break;
+      case "all":
+      case "any":
+        expression.children.forEach(collect);
+        break;
+      case "when":
+      case "unless":
+        collect(expression.test);
+        collect(expression.requirement);
+        break;
+      case "points":
+        expression.categories.forEach(({ alternatives }) => alternatives.forEach(({ when }) => collect(when)));
+        break;
+      case "threshold-table":
+        inputs.add(expression.input).add(expression.bandInput).add(expression.categoryInput);
+        break;
+    }
+  }
+
+  if (policy.expression) collect(policy.expression);
+  return [...inputs];
+}
+
 /** Evaluate one reviewed version as of the supplied UTC calendar date. */
 export function evaluatePolicy(policy: Policy | undefined, profile: Profile, asOf: string): Evaluation {
   if (!isDate(asOf)) return uncovered(policy, "invalid-as-of");
@@ -411,7 +513,7 @@ export function evaluatePolicy(policy: Policy | undefined, profile: Profile, asO
       return uncovered(policy, "unusable-version");
     }
 
-    const context: ExpressionContext = { conditions, profile, checks: new Map(), groups: [], scores: [] };
+    const context: ExpressionContext = { conditions, profile, checks: new Map(), groups: [], scores: [], thresholds: [] };
     const expression = evaluateExpression(policy.expression, context, "required");
     return {
       status: expressionOutcomes[expression.status],
@@ -421,6 +523,7 @@ export function evaluatePolicy(policy: Policy | undefined, profile: Profile, asO
       expression,
       groups: context.groups,
       scores: context.scores,
+      thresholds: context.thresholds,
       coverageIssue: null,
     };
   }

@@ -130,6 +130,8 @@ export const copy = {
   effectiveUnknown: { en: "No date identified in the cited source", zh: "引用来源中未确认具体日期" },
   unavailable: { en: "Unavailable", zh: "暂无" },
   assessmentDate: { en: "Check date (UTC)", zh: "核对日期（UTC）" },
+  localAssessmentDate: { en: "Local policy date", zh: "当地政策核对日期" },
+  minimumForCase: { en: "Minimum for these answers", zh: "这些条件适用的最低门槛" },
   backToTop: { en: "Back to top", zh: "返回顶部" },
   languageControl: { en: "Display language", zh: "界面语言" },
 } satisfies Record<string, Localized>;

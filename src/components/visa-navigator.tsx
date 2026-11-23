@@ -27,10 +27,11 @@ function routePriority(policies: readonly CheckedPolicy[]) {
   return Math.min(...policies.map(({ outcome }) => priority[outcome.status]));
 }
 
-function MatchCard({ route, policies, language }: {
+function MatchCard({ route, policies, language, localDate }: {
   route: Route;
   policies: readonly CheckedPolicy[];
   language: Language;
+  localDate?: string;
 }) {
   const country = countriesById.get(route.countryId);
   const relevance = policies[0]?.relevance;
@@ -40,6 +41,7 @@ function MatchCard({ route, policies, language }: {
     <li className="route-card match-card" data-route-id={route.id}>
       <p className="route-context"><span aria-hidden="true">{country?.flag}</span> {country?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}</p>
       <h3>{route.name[language]}</h3>
+      {localDate && <p className="policy-meta">{t("localAssessmentDate")} <time dateTime={localDate}>{localDate}</time> ({route.policyTimeZone})</p>}
       <dl className="match-statuses">
         <div>
           <dt>{t("alignment")}</dt>
@@ -60,7 +62,11 @@ function MatchCard({ route, policies, language }: {
   );
 }
 
-export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf: string }) {
+export function VisaNavigator({ routes, asOf, localDates }: {
+  routes: readonly Route[];
+  asOf: string;
+  localDates: Readonly<Record<string, string>>;
+}) {
   const [language, setLanguage] = useState<Language>("zh");
   const [countryFilter, setCountryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
@@ -74,7 +80,7 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
   const questions = getRuleQuestionGroups(routes);
   const matchedRoutes = matchRun ? routes.flatMap((route) => {
     const policies = routePolicies(route)
-      .map((policy) => ({ policy, ...evaluatePathway(policy, matchRun.profile, matchRun.asOf, [route.category]) }))
+      .map((policy) => ({ policy, ...evaluatePathway(policy, matchRun.profile, localDates[route.id] ?? matchRun.asOf, [route.category]) }))
       .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
       .sort((first, second) => priority[first.outcome.status] - priority[second.outcome.status]);
     return policies.length > 0 ? [{ route, policies }] : [];
@@ -231,7 +237,7 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
               ) : (
                 <ul className="route-grid">
                   {matchedRoutes.map(({ route, policies }) => (
-                    <MatchCard key={route.id} route={route} policies={policies} language={language} />
+                    <MatchCard key={route.id} route={route} policies={policies} language={language} localDate={localDates[route.id]} />
                   ))}
                 </ul>
               )}

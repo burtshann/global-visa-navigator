@@ -19,7 +19,14 @@ npm run build
 npm run start
 ```
 
-`npm run check` 执行 ESLint、TypeScript 类型检查和自动化测试。单独执行测试使用 `npm test`。构建后用 `npm run start` 运行生产模式。
+`npm run check` 执行 ESLint、TypeScript 类型检查和自动化测试。单独执行测试使用 `npm test`。构建后用 `npm run start` 运行生产模式。生产模式需要有效的 `POLICY_DATABASE_URL` 才能提供已批准的规则，未连接时仍可浏览目录。
+
+## 第三阶段
+
+- 新加坡 Employment Pass 核对新申请的本地职位邀请和第一阶段固定月薪。按核对当天适用的工资表、申请时年龄和雇主行业核对月薪。新申请标准于 2027 年 1 月 1 日切换，使用新加坡日期。 [规则来源与范围](docs/data-model.md#第三阶段新加坡-employment-pass)
+- 英国 Skilled Worker 核对首次主申请人的年龄、担保证明、雇主担保资质和 B2 英语证明。两个新增路径都保留完整资格待核实的提示。 [规则来源与范围](docs/data-model.md#第三阶段英国-skilled-worker)
+- PostgreSQL 区分网页读取、政策入审和审批权限。审核记录使用独立数据库登录身份。正式生产环境通过只读凭据加载获批快照。 [生产与发布配置](docs/testing-deployment.md#web-部署)
+- 私人预览使用受保护的 HTTPS 入口，供授权人员在 iPhone 上体验。 [预览配置与验收](docs/testing-deployment.md#iphone-私人预览)
 
 ## 第二阶段
 

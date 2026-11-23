@@ -19,13 +19,22 @@ describe("published visa catalog", () => {
   });
 
   it("publishes only source-verified, scoped application checks", () => {
-    const withPolicies = routes.filter(({ policy }) => policy);
-    expect(withPolicies.map(({ id }) => id)).toEqual(["uk-graduate", "de-opportunity-card"]);
+    const current = routes.flatMap((route) => [route.policy, ...(route.policies ?? [])].flatMap((policy) => {
+      if (!policy || evaluatePolicy(policy, {}, verifiedDate).status === "rules-not-covered") return [];
+      expect(policy.scope ?? route.scope).toBeDefined();
+      expect(policy.stage).toBe("application");
+      expect(evaluatePolicy(policy, {}, verifiedDate).status).toBe("profile-incomplete");
+      return policy.id;
+    }));
+    expect(current).toEqual([
+      "uk-graduate", "de-opportunity-card-skilled-worker", "de-opportunity-card-points",
+      "uk-skilled-worker-initial", "sg-ep-stage-1-2025",
+    ]);
 
-    for (const route of withPolicies) {
-      expect(route.scope).toBeDefined();
-      expect(route.policy?.stage).toBe("application");
-      expect(evaluatePolicy(route.policy, {}, verifiedDate).status).toBe("profile-incomplete");
+    const singapore = routes.find(({ id }) => id === "sg-employment-pass");
+    for (const date of ["2026-12-31", "2027-01-01"]) {
+      const usable = singapore?.policies?.filter((policy) => evaluatePolicy(policy, {}, date).coverageIssue === null);
+      expect(usable?.map(({ id }) => id)).toEqual([date === "2026-12-31" ? "sg-ep-stage-1-2025" : "sg-ep-stage-1-2027"]);
     }
 
     const directoryOnly = routes.find(({ id }) => id === "ca-express-entry");

@@ -68,8 +68,13 @@ export const ukGraduatePolicy = {
 
 export const deOpportunityCardPolicy = {
   id: "de-opportunity-card-skilled-worker",
-  version: "2026-11-23.1",
+  version: "2026-11-23.2",
   stage: "application",
+  name: { en: "Skilled worker mechanism", zh: "技术人才路径" },
+  scope: {
+    en: "Checks three conditions of an initial skilled-worker application. Applicants in Germany must also check residence-permit requirements.",
+    zh: "核对技术人才首次申请的三项条件。身在德国的申请人还需核对居留许可要求。",
+  },
   conditions: [
     {
       id: "de-oc-nationality-scope",

@@ -1,228 +1,66 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { categoryLabels, countries, routes, type Category, type Country, type Route } from "../data/catalog";
-import {
-  evaluatePolicy,
-  type Condition,
-  type Evaluation,
-  type Localized,
-  type Policy,
-  type Profile,
-} from "../domain/policy";
-import { copy, educationOptions, specificQuestions } from "./navigator-copy";
-import type { NationalityOptionsByLanguage } from "./nationality-options";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Route } from "../data/catalog";
+import { categoryLabels, countries, type Category, type Country } from "../data/destinations";
+import { evaluatePathway, type Evaluation, type Policy, type Profile } from "../domain/policy";
+import { prepareMatchingProfile } from "../data/matching-profile";
+import { copy } from "./navigator-copy";
+import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
+import { getRuleQuestionGroups, readProfile, RuleQuestions } from "./profile-questions";
 
-type Language = keyof Localized;
 type MatchRun = { profile: Profile; asOf: string };
-
-const evaluationLabels: Record<Evaluation["status"], Localized> = {
-  "conditions-met": { en: "All checked conditions met", zh: "符合本次核对的所有条件" },
-  "conditions-not-met": { en: "A checked condition is unmet", zh: "至少一项已核对条件未满足" },
-  "profile-incomplete": { en: "More answers needed", zh: "需要补充答案" },
-  "rules-not-covered": { en: "Rule checks unavailable", zh: "暂无规则核对结果" },
-};
-
-const checkLabels: Record<Evaluation["checks"][number]["status"], Localized> = {
-  pass: { en: "Met", zh: "已满足" },
-  fail: { en: "Unmet", zh: "未满足" },
-  unknown: { en: "Unanswered", zh: "待确认" },
-};
-
-const stageLabels: Record<Policy["stage"], Localized> = {
-  application: { en: "Application conditions", zh: "申请条件" },
-  invitation: { en: "Invitation conditions", zh: "获邀条件" },
-  approval: { en: "Final approval conditions", zh: "最终审批条件" },
-};
+type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
 const priority: Record<Evaluation["status"], number> = {
   "conditions-met": 0,
   "profile-incomplete": 1,
   "conditions-not-met": 2,
-  "rules-not-covered": 3,
+  "conditions-not-applicable": 3,
+  "rules-not-covered": 4,
 };
 
-const categories = Object.entries(categoryLabels) as [Category, Localized][];
-const ruleRoutes = routes.filter((route) => route.policy !== undefined);
+const categories = Object.entries(categoryLabels) as [Category, { en: string; zh: string }][];
 const countriesById = new Map<string, Country>(countries.map((country) => [country.id, country]));
-const routesById = new Map<string, Route>(routes.map((route) => [route.id, route]));
-function readField(form: HTMLFormElement, id: string) {
-  // Use IDs so a native form submission cannot send personal values.
-  const field = form.elements.namedItem(id);
-  if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) {
-    return field.value.trim() || undefined;
-  }
-  return undefined;
+
+function routePriority(policies: readonly CheckedPolicy[]) {
+  return Math.min(...policies.map(({ outcome }) => priority[outcome.status]));
 }
 
-function readNumber(form: HTMLFormElement, id: string) {
-  const value = readField(form, id);
-  return value === undefined ? undefined : Number(value);
-}
-
-function readBoolean(value: string | undefined) {
-  return value === undefined ? undefined : value === "yes";
-}
-
-function getAnswerName(condition: Condition) {
-  return condition.input.startsWith("answer:") ? condition.input.slice(7) : undefined;
-}
-
-function readProfile(form: HTMLFormElement): Profile {
-  const answers: Record<string, boolean | number | string | undefined> = {};
-  for (const route of ruleRoutes) {
-    for (const condition of route.policy?.conditions ?? []) {
-      const name = getAnswerName(condition);
-      if (!name) continue;
-      const id = `question-${route.id}-${name}`;
-      const value = readField(form, id);
-      if (value === undefined) continue;
-      if (typeof condition.expected === "boolean") {
-        answers[name] = readBoolean(value);
-      } else if (typeof condition.expected === "number") {
-        answers[name] = Number(value);
-      } else {
-        answers[name] = value;
-      }
-    }
-  }
-  return {
-    nationality: readField(form, "profile-nationality"),
-    age: readNumber(form, "profile-age"),
-    education: readField(form, "profile-education"),
-    occupation: readField(form, "profile-occupation"),
-    experienceYears: readNumber(form, "profile-experience"),
-    language: readField(form, "profile-language"),
-    budgetUsd: readNumber(form, "profile-budget"),
-    jobOffer: readBoolean(readField(form, "profile-offer")),
-    goal: readField(form, "profile-goal"),
-    answers,
-  };
-}
-
-function OfficialLink({ href, label, className }: { href: string; label: string; className?: string }) {
-  return (
-    <a className={className} href={href} target="_blank" rel="noopener noreferrer">
-      {label} <span aria-hidden="true">↗</span>
-    </a>
-  );
-}
-
-function Status({ route, evaluation, language }: { route: Route; evaluation?: Evaluation; language: Language }) {
-  const kind = evaluation?.status ?? (route.policy ? "sample" : "rules-not-covered");
-  const label = evaluation
-    ? evaluationLabels[evaluation.status][language]
-    : route.policy
-      ? copy.ruleSample[language]
-      : copy.browseOnly[language];
-  return <span className={`status status--${kind}`}>{label}</span>;
-}
-
-function RuleDetails({ route, evaluation, language }: {
+function MatchCard({ route, policies, language }: {
   route: Route;
-  evaluation?: Evaluation;
+  policies: readonly CheckedPolicy[];
   language: Language;
 }) {
-  const policy = route.policy;
-  if (!policy || evaluation?.status === "rules-not-covered") {
-    return (
-      <p className="route-scope">
-        {(policy ? copy.policyUnavailable : copy.browseOnlyText)[language]}
-      </p>
-    );
-  }
-  const checkStatus = new Map(evaluation?.checks.map(({ condition, status }) => [condition.id, status]));
+  const country = countriesById.get(route.countryId);
+  const relevance = policies[0]?.relevance;
+  const t = (key: keyof typeof copy) => copy[key][language];
+
   return (
-    <>
-      {route.scope && (
-        <p className="route-scope"><strong>{copy.scope[language]}</strong> {route.scope[language]}</p>
-      )}
-      <details className="rules" open={evaluation !== undefined}>
-        <summary>{copy.checks[language]}</summary>
-        <p className="policy-meta">
-          {stageLabels[policy.stage][language]} <span aria-hidden="true">·</span>{" "}
-          {copy.version[language]} {policy.version}
-        </p>
-        <ul className="conditions">
-          {policy.conditions.map((condition) => {
-            const status = checkStatus.get(condition.id);
-            const source = condition.source;
-            return (
-              <li key={condition.id} className="condition">
-                <div className="condition-heading">
-                  <strong>{condition.label[language]}</strong>
-                  {status && (
-                    <span className={`check check--${status}`}>{checkLabels[status][language]}</span>
-                  )}
-                </div>
-                {status && status !== "pass" && (
-                  <p><strong>{copy.nextStep[language]}</strong> {condition.nextStep[language]}</p>
-                )}
-                <details className="condition-source">
-                  <summary>{copy.sourceDetails[language]}</summary>
-                  <dl>
-                    <dt>{copy.applicability[language]}</dt><dd>{source.applicableWhen[language]}</dd>
-                    <dt>{copy.effective[language]}</dt>
-                    <dd>{source.effectiveFrom ?? copy.effectiveUnknown[language]}</dd>
-                    {source.effectiveUntil && (
-                      <><dt>{copy.effectiveUntil[language]}</dt><dd>{source.effectiveUntil}</dd></>
-                    )}
-                    <dt>{copy.verifiedAt[language]}</dt><dd>{source.lastVerifiedAt ?? copy.unavailable[language]}</dd>
-                    <dt>{copy.reviewState[language]}</dt><dd>{copy[source.reviewStatus][language]}</dd>
-                  </dl>
-                  <OfficialLink className="text-link" href={source.url} label={copy.openOfficialSource[language]} />
-                </details>
-              </li>
-            );
-          })}
-        </ul>
-      </details>
-    </>
+    <li className="route-card match-card" data-route-id={route.id}>
+      <p className="route-context"><span aria-hidden="true">{country?.flag}</span> {country?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}</p>
+      <h3>{route.name[language]}</h3>
+      <dl className="match-statuses">
+        <div>
+          <dt>{t("alignment")}</dt>
+          <dd>{t(relevance === "aligned" ? "goalAligned" : relevance === "different-goal" ? "differentGoal" : "goalUnknown")}</dd>
+        </div>
+        <div><dt>{t("fullEligibility")}</dt><dd>{t("fullEligibilityUnverified")}</dd></div>
+      </dl>
+      {policies.map(({ policy, outcome }) => (
+        <div className="match-mechanism" key={policy.id} data-policy-id={policy.id}>
+          {policy.name && <h4>{policy.name[language]}</h4>}
+          <p className="match-outcome"><strong>{t("checkedOutcome")}</strong> <PolicyStatus language={language} evaluation={outcome} /></p>
+          {(policy.scope ?? route.scope) && <p className="route-scope"><strong>{t("scope")}</strong> {(policy.scope ?? route.scope)?.[language]}</p>}
+          <PolicyDetails language={language} policy={policy} evaluation={outcome} />
+        </div>
+      ))}
+      <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
+    </li>
   );
 }
 
-function BooleanInput({ id, language }: { id: string; language: Language }) {
-  return (
-    <select id={id}>
-      <option value="">{copy.unfinished[language]}</option>
-      <option value="yes">{copy.yes[language]}</option>
-      <option value="no">{copy.no[language]}</option>
-    </select>
-  );
-}
-
-function RuleQuestions({ language }: { language: Language }) {
-  return (
-    <details className="rule-questions" open>
-      <summary>{copy.pathwayQuestions[language]}</summary>
-      <p>{copy.pathwayQuestionsIntro[language]}</p>
-      <div className="rule-question-groups">
-        {ruleRoutes.map((route) => (
-          <fieldset key={route.id}>
-            <legend>{route.name[language]}</legend>
-            {route.policy?.conditions.map((condition) => {
-              const name = getAnswerName(condition);
-              if (!name) return null;
-              const id = `question-${route.id}-${name}`;
-              return (
-                <label key={condition.id} htmlFor={id} className="field">
-                  <span>{(specificQuestions[name] ?? condition.label)[language]}</span>
-                  {typeof condition.expected === "boolean" ? (
-                    <BooleanInput id={id} language={language} />
-                  ) : (
-                    <input id={id} type={typeof condition.expected === "number" ? "number" : "text"} maxLength={80} />
-                  )}
-                </label>
-              );
-            })}
-          </fieldset>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOptionsByLanguage: NationalityOptionsByLanguage }) {
+export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf: string }) {
   const [language, setLanguage] = useState<Language>("zh");
   const [countryFilter, setCountryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
@@ -231,23 +69,27 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
   const [comparison, setComparison] = useState<string[]>([]);
   const [showComparison, setShowComparison] = useState(false);
 
-  const evaluations = new Map<string, Evaluation>();
-  if (matchRun) {
-    for (const route of routes) {
-      evaluations.set(route.id, evaluatePolicy(route.policy, matchRun.profile, matchRun.asOf));
-    }
-  }
+  const resultsTitle = useRef<HTMLHeadingElement>(null);
+  const routesById = new Map(routes.map((route) => [route.id, route]));
+  const questions = getRuleQuestionGroups(routes);
+  const matchedRoutes = matchRun ? routes.flatMap((route) => {
+    const policies = routePolicies(route)
+      .map((policy) => ({ policy, ...evaluatePathway(policy, matchRun.profile, matchRun.asOf, [route.category]) }))
+      .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
+      .sort((first, second) => priority[first.outcome.status] - priority[second.outcome.status]);
+    return policies.length > 0 ? [{ route, policies }] : [];
+  }).sort((first, second) => routePriority(first.policies) - routePriority(second.policies)) : [];
+  const matchesById = new Map(matchedRoutes.map(({ route, policies }) => [route.id, policies]));
   const visibleRoutes = routes.filter((route) =>
     (countryFilter === "all" || route.countryId === countryFilter) &&
     (categoryFilter === "all" || route.category === categoryFilter),
   );
-  if (matchRun) {
-    visibleRoutes.sort((first, second) => {
-      const firstStatus = evaluations.get(first.id)?.status ?? "rules-not-covered";
-      const secondStatus = evaluations.get(second.id)?.status ?? "rules-not-covered";
-      return priority[firstStatus] - priority[secondStatus];
-    });
-  }
+
+  useEffect(() => {
+    if (!matchRun) return;
+    resultsTitle.current?.focus({ preventScroll: true });
+    resultsTitle.current?.scrollIntoView({ block: "start" });
+  }, [matchRun]);
 
   const t = (key: keyof typeof copy) => copy[key][language];
 
@@ -258,13 +100,9 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
 
   function checkProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const profile = readProfile(event.currentTarget);
-    const asOf = new Date().toISOString().slice(0, 10);
+    const profile = prepareMatchingProfile(readProfile(event.currentTarget, questions));
     setMatchRun({ profile, asOf });
-    if (profile.goal) setCategoryFilter(profile.goal as Category);
     setFormMessage("checked");
-    window.location.hash = "pathways";
-    document.getElementById("pathways-title")?.focus({ preventScroll: true });
   }
 
   function clearProfile() {
@@ -358,54 +196,14 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
             </div>
             <form className="profile-form" onSubmit={checkProfile} onReset={clearProfile} autoComplete="off" aria-describedby="privacy-note">
               <p id="privacy-note" className="privacy-note">{t("privacy")}</p>
-              <div className="profile-grid">
-                <label className="field" htmlFor="profile-nationality">
-                  <span>{t("nationality")}</span>
-                  <select id="profile-nationality">
-                    <option value="">{t("select")}</option>
-                    {nationalityOptionsByLanguage[language].map(({ code, name }) => <option key={code} value={code}>{name}</option>)}
-                  </select>
-                </label>
-                <label className="field" htmlFor="profile-age">
-                  <span>{t("age")}</span>
-                  <input id="profile-age" type="number" min="0" max="120" step="1" autoComplete="off" />
-                </label>
-                <label className="field" htmlFor="profile-education">
-                  <span>{t("education")}</span>
-                  <select id="profile-education">
-                    <option value="">{t("select")}</option>
-                    {Object.entries(educationOptions).map(([value, label]) => <option key={value} value={value}>{label[language]}</option>)}
-                  </select>
-                </label>
-                <label className="field" htmlFor="profile-occupation">
-                  <span>{t("occupation")}</span>
-                  <input id="profile-occupation" placeholder={t("occupationExample")} maxLength={80} autoComplete="off" />
-                </label>
-                <label className="field" htmlFor="profile-experience">
-                  <span>{t("experience")}</span>
-                  <input id="profile-experience" type="number" min="0" max="100" step="any" autoComplete="off" />
-                </label>
-                <label className="field" htmlFor="profile-language">
-                  <span>{t("language")}</span>
-                  <input id="profile-language" placeholder={t("languageExample")} maxLength={80} autoComplete="off" />
-                </label>
-                <label className="field" htmlFor="profile-budget">
-                  <span>{t("budget")}</span>
-                  <input id="profile-budget" type="number" min="0" step="0.01" autoComplete="off" />
-                </label>
-                <label className="field" htmlFor="profile-offer">
-                  <span>{t("jobOffer")}</span>
-                  <BooleanInput id="profile-offer" language={language} />
-                </label>
-                <label className="field" htmlFor="profile-goal">
-                  <span>{t("goal")}</span>
-                  <select id="profile-goal">
-                    <option value="">{t("select")}</option>
-                    {categories.map(([category, label]) => <option key={category} value={category}>{label[language]}</option>)}
-                  </select>
-                </label>
-              </div>
-              <RuleQuestions language={language} />
+              <label className="field goal-field" htmlFor="profile-goal">
+                <span>{t("goal")}</span>
+                <select id="profile-goal">
+                  <option value="">{t("select")}</option>
+                  {categories.map(([category, label]) => <option key={category} value={category}>{label[language]}</option>)}
+                </select>
+              </label>
+              <RuleQuestions groups={questions} language={language} />
               <div className="form-actions">
                 <button className="button button--primary" type="submit">{t("check")} <span aria-hidden="true">→</span></button>
                 <button className="button button--outline" type="reset">{t("clear")}</button>
@@ -414,6 +212,32 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
             </form>
           </div>
         </section>
+
+        {matchRun && (
+          <section id="personal-results" className="section personal-results" aria-labelledby="personal-results-title">
+            <div className="container">
+              <div className="section-heading">
+                <h2 id="personal-results-title" ref={resultsTitle} tabIndex={-1}>{t("personalResults")}</h2>
+                <p>{t("personalResultsIntro")}</p>
+              </div>
+              <p className="policy-meta match-date">
+                {t("assessmentDate")} <time dateTime={matchRun.asOf}>{matchRun.asOf}</time>
+              </p>
+              {matchedRoutes.length === 0 ? (
+                <div className="empty-state">
+                  <p>{t(matchRun.profile.goal ? "personalEmpty" : "personalEmptyNoGoal")}</p>
+                  <a className="text-link" href="#pathways">{t("goToDirectory")}</a>
+                </div>
+              ) : (
+                <ul className="route-grid">
+                  {matchedRoutes.map(({ route, policies }) => (
+                    <MatchCard key={route.id} route={route} policies={policies} language={language} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
 
         <section id="pathways" className="section catalog" aria-labelledby="pathways-title">
           <div className="container">
@@ -444,7 +268,6 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
             <div className="catalog-summary">
               <p aria-live="polite">
                 {visibleRoutes.length} {t(visibleRoutes.length === 1 ? "pathway" : "pathways")}
-                {matchRun && <span> <span aria-hidden="true">·</span> {t("assessmentDate")} {matchRun.asOf}</span>}
               </p>
               {comparison.length > 0 && (
                 <button type="button" className="button button--outline comparison-toggle" aria-expanded={showComparison} aria-controls="route-comparison" onClick={() => setShowComparison(!showComparison)}>
@@ -461,14 +284,26 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
                 {comparison.map((id) => {
                   const route = routesById.get(id);
                   if (!route) return null;
-                  const evaluation = evaluations.get(id);
+                  const checkedPolicies = matchesById.get(id);
                   return (
                     <li key={id} className="comparison-card">
                       <div className="route-context">
                         {countriesById.get(route.countryId)?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}
                       </div>
                       <h4>{route.name[language]}</h4>
-                      <Status route={route} evaluation={evaluation} language={language} />
+                      {checkedPolicies ? (
+                        <>
+                          <p>{t("fullEligibilityUnverified")}</p>
+                          <ul className="compared-checks">
+                            {checkedPolicies.map(({ policy, outcome }) => (
+                              <li key={policy.id}>
+                                {policy.name?.[language] ?? t("checkedOutcome")}{" "}
+                                <PolicyStatus evaluation={outcome} language={language} />
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : <PolicyStatus hasPolicy={routePolicies(route).length > 0} language={language} />}
                       <p>{route.scope?.[language] ?? route.description[language]}</p>
                       <div className="comparison-actions">
                         <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
@@ -484,15 +319,23 @@ export function VisaNavigator({ nationalityOptionsByLanguage }: { nationalityOpt
             <ul className="route-grid">
               {visibleRoutes.map((route) => {
                 const country = countriesById.get(route.countryId);
-                const evaluation = evaluations.get(route.id);
+                const policies = routePolicies(route);
                 const selected = comparison.includes(route.id);
                 return (
-                  <li className="route-card" key={route.id}>
+                  <li className="route-card" key={route.id} data-route-id={route.id}>
                     <p className="route-context"><span aria-hidden="true">{country?.flag}</span> {country?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}</p>
                     <h3>{route.name[language]}</h3>
                     <p className="route-description">{route.description[language]}</p>
-                    <Status route={route} evaluation={evaluation} language={language} />
-                    <RuleDetails route={route} evaluation={evaluation} language={language} />
+                    <PolicyStatus hasPolicy={policies.length > 0} language={language} />
+                    {route.scope && <p className="route-scope"><strong>{t("scope")}</strong> {route.scope[language]}</p>}
+                    {policies.length === 0 && <p className="route-scope">{t("browseOnlyText")}</p>}
+                    {policies.map((policy) => (
+                      <div key={policy.id}>
+                        {policy.name && <h4 className="catalog-mechanism">{policy.name[language]}</h4>}
+                        {policy.scope && <p className="route-scope">{policy.scope[language]}</p>}
+                        <PolicyDetails language={language} policy={policy} />
+                      </div>
+                    ))}
                     <div className="route-actions">
                       <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
                       <button className="button button--outline button--compact" type="button" aria-pressed={selected} aria-label={`${t("compare")} · ${route.name[language]}`} disabled={!selected && comparison.length === 3} onClick={() => toggleComparison(route.id)}>

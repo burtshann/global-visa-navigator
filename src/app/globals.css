@@ -897,7 +897,8 @@ html[lang="zh-Hans"] .hero h1 {
   .primary-nav {
     width: 100%;
     order: 3;
-    gap: 21px;
+    flex-wrap: wrap;
+    gap: 0 21px;
     margin-top: 7px;
   }
 
@@ -959,6 +960,13 @@ html[lang="zh-Hans"] .hero h1 {
     font-size: 1rem;
   }
 
+  .footer-inner {
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    padding-block: 12px;
+  }
+
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 10px;
@@ -995,13 +1003,6 @@ html[lang="zh-Hans"] .hero h1 {
 
   .country-entry {
     min-height: 73px;
-  }
-
-  .footer-inner {
-    min-height: 0;
-    flex-wrap: wrap;
-    gap: 0;
-    padding-block: 12px;
   }
 }
 

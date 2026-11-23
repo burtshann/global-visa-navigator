@@ -144,7 +144,23 @@ test.describe("mobile viewport", () => {
     const englishResult = page.getByRole("region", { name: "Your pathway checks" }).locator('[data-route-id="uk-graduate"]');
     await expect(englishResult.getByText("More information needed", { exact: true })).toBeVisible();
     await expect(englishResult.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+    const expectNoOverflow = async () => {
+      const layout = await page.evaluate(async () => {
+        await document.fonts.ready;
+        const width = document.documentElement.scrollWidth;
+        const overflow = Array.from(document.body.querySelectorAll("*")).flatMap((element) => {
+          const right = Math.round(element.getBoundingClientRect().right);
+          return right > 390 ? [{ tag: element.tagName, id: element.id, classes: element.className, right }] : [];
+        });
+        return { width, overflow: overflow.slice(0, 8) };
+      });
+      expect(layout.width, JSON.stringify(layout.overflow)).toBe(390);
+    };
+    await expectNoOverflow();
+
+    // Wider fallback fonts must not force the English navigation outside the viewport.
+    await page.addStyleTag({ content: ".primary-nav, .footer-inner { font-family: monospace; }" });
+    await expectNoOverflow();
     expect(pageErrors).toEqual([]);
   });
 });

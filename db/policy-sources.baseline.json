@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "id": "govuk-appendix-graduate",
+      "url": "https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-graduate",
+      "normalizer": "govuk-graduate-article-v1",
+      "capturedAt": "2026-11-23T09:27:19Z",
+      "sha256": "0e5a219b959d84bb07524aa909f2eda1306655e248bd618884310b50ce53bd09"
+    },
+    {
+      "id": "de-residence-act-20a",
+      "url": "https://www.gesetze-im-internet.de/aufenthg_2004/__20a.html",
+      "normalizer": "de-section-20a-v1",
+      "capturedAt": "2026-11-23T09:27:22Z",
+      "sha256": "59d36cded6a4667bd029495c89fd2a788f6c791682e75235143b706d9c1fee20"
+    }
+  ]
+}

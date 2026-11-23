@@ -1,24 +1,10 @@
 import type { Localized, Policy } from "@/domain/policy";
+import { deOpportunityCardPointsPolicy } from "./de-opportunity-card";
+import type { Category, CountryId } from "./destinations";
 import { deOpportunityCardPolicy, ukGraduatePolicy } from "./policies";
 
-export const categoryLabels = {
-  "skilled-work": { en: "Skilled work", zh: "技术工作" },
-  "job-search": { en: "Job search", zh: "求职" },
-  "skilled-migration": { en: "Skilled migration", zh: "技术移民" },
-  study: { en: "Study", zh: "留学" },
-  "post-study": { en: "Post-study work", zh: "留学后工作" },
-} satisfies Record<string, Localized>;
-
-export type Category = keyof typeof categoryLabels;
-export type CountryId = "US" | "CA" | "GB" | "DE" | "AU" | "NZ" | "JP" | "KR" | "SG";
-
-export type Country = Readonly<{
-  id: CountryId;
-  name: Localized;
-  region: Localized;
-  flag: string;
-  officialUrl: string;
-}>;
+export { categoryLabels, countries } from "./destinations";
+export type { Category, Country, CountryId } from "./destinations";
 
 export type Route = Readonly<{
   id: string;
@@ -28,52 +14,9 @@ export type Route = Readonly<{
   category: Category;
   officialUrl: string;
   policy?: Policy;
+  policies?: readonly Policy[];
   scope?: Localized;
 }>;
-
-const northAmerica = { en: "North America", zh: "北美洲" };
-const europe = { en: "Europe", zh: "欧洲" };
-const oceania = { en: "Oceania", zh: "大洋洲" };
-const asia = { en: "Asia", zh: "亚洲" };
-
-export const countries: readonly Country[] = [
-  {
-    id: "US", name: { en: "United States", zh: "美国" }, region: northAmerica, flag: "🇺🇸",
-    officialUrl: "https://travel.state.gov/content/travel/en/us-visas.html",
-  },
-  {
-    id: "CA", name: { en: "Canada", zh: "加拿大" }, region: northAmerica, flag: "🇨🇦",
-    officialUrl: "https://www.canada.ca/en/services/immigration-citizenship.html",
-  },
-  {
-    id: "GB", name: { en: "United Kingdom", zh: "英国" }, region: europe, flag: "🇬🇧",
-    officialUrl: "https://www.gov.uk/browse/visas-immigration",
-  },
-  {
-    id: "DE", name: { en: "Germany", zh: "德国" }, region: europe, flag: "🇩🇪",
-    officialUrl: "https://www.make-it-in-germany.com/en/visa-recognition",
-  },
-  {
-    id: "AU", name: { en: "Australia", zh: "澳大利亚" }, region: oceania, flag: "🇦🇺",
-    officialUrl: "https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing",
-  },
-  {
-    id: "NZ", name: { en: "New Zealand", zh: "新西兰" }, region: oceania, flag: "🇳🇿",
-    officialUrl: "https://www.immigration.govt.nz/visas/",
-  },
-  {
-    id: "JP", name: { en: "Japan", zh: "日本" }, region: asia, flag: "🇯🇵",
-    officialUrl: "https://www.mofa.go.jp/j_info/visit/visa/index.html",
-  },
-  {
-    id: "KR", name: { en: "South Korea", zh: "韩国" }, region: asia, flag: "🇰🇷",
-    officialUrl: "https://www.visa.go.kr/openPage.do?MENU_ID=10101",
-  },
-  {
-    id: "SG", name: { en: "Singapore", zh: "新加坡" }, region: asia, flag: "🇸🇬",
-    officialUrl: "https://www.mom.gov.sg/passes-and-permits",
-  },
-];
 
 export const routes: readonly Route[] = [
   {
@@ -93,10 +36,11 @@ export const routes: readonly Route[] = [
     description: { en: "A residence route for looking for qualified employment in Germany.", zh: "用于在德国寻找符合要求的工作岗位。" },
     officialUrl: "https://www.make-it-in-germany.com/en/visa-recognition/opportunity-card/job-search",
     scope: {
-      en: "Checks three conditions of an initial skilled-worker application. Applicants in Germany must also check residence-permit requirements. The points-based route and extensions have separate rules.",
-      zh: "核对技术人才首次申请的三项条件。身在德国的申请人还需核对居留许可要求。积分路径及续期适用各自的规定。",
+      en: "The initial card has a skilled-worker mechanism and a points mechanism. Applications within Germany, repeat applications and extensions have additional rules.",
+      zh: "首次申请分为技术人才路径与积分路径。德国境内申请、再次申请和续期另有规则。",
     },
     policy: deOpportunityCardPolicy,
+    policies: [deOpportunityCardPointsPolicy],
   },
   {
     id: "us-h1b", countryId: "US", category: "skilled-work",

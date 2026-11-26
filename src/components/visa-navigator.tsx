@@ -8,7 +8,7 @@ import { prepareMatchingProfile } from "../data/matching-profile";
 import type { Assessment } from "../server/assessment";
 import { copy } from "./navigator-copy";
 import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
-import { getRuleQuestionGroups, readProfile, RuleQuestions } from "./profile-questions";
+import { getRuleQuestionGroups, readProfile, RuleQuestions, type ProfileDraft } from "./profile-questions";
 
 type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
@@ -25,6 +25,10 @@ const countriesById = new Map<string, Country>(countries.map((country) => [count
 
 function routePriority(policies: readonly CheckedPolicy[]) {
   return Math.min(...policies.map(({ outcome }) => priority[outcome.status]));
+}
+
+function assessmentRoutes(directory: readonly Route[], assessment: Assessment) {
+  return directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
 }
 
 function MatchCard({ route, policies, language, localDate }: {
@@ -70,18 +74,22 @@ export function VisaNavigator({ directory, initialAssessment }: {
   const [countryFilter, setCountryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [assessment, setAssessment] = useState(initialAssessment);
+  const [draft, setDraft] = useState<ProfileDraft>({});
   const [checkedProfile, setCheckedProfile] = useState<Profile | null>(null);
-  const [formMessage, setFormMessage] = useState<"checking" | "checked" | "cleared" | "checkFailed" | null>(null);
+  const [formMessage, setFormMessage] = useState<"checking" | "checked" | "cleared" | "checkFailed" | null>(
+    initialAssessment.availability === "unavailable" ? "checkFailed" : null,
+  );
   const [comparison, setComparison] = useState<string[]>([]);
   const [showComparison, setShowComparison] = useState(false);
 
   const resultsTitle = useRef<HTMLHeadingElement>(null);
   const assessmentRequest = useRef<AbortController | null>(null);
   const { asOf, localDates } = assessment;
-  const routes = directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
+  const lastAvailableRoutes = assessmentRoutes(directory, assessment);
+  const routes = assessment.availability === "unavailable" ? directory : lastAvailableRoutes;
   const routesById = new Map(routes.map((route) => [route.id, route]));
-  const questions = getRuleQuestionGroups(routes);
-  const matchedRoutes = checkedProfile ? routes.flatMap((route) => {
+  const questions = getRuleQuestionGroups(lastAvailableRoutes);
+  const matchedRoutes = checkedProfile && assessment.availability === "available" ? routes.flatMap((route) => {
     const policies = routePolicies(route)
       .map((policy) => ({ policy, ...evaluatePathway(policy, checkedProfile, localDates[route.id] ?? asOf, [route.category]) }))
       .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
@@ -107,9 +115,12 @@ export function VisaNavigator({ directory, initialAssessment }: {
     document.documentElement.lang = nextLanguage === "zh" ? "zh-Hans" : "en";
   }
 
+  function updateDraft(input: string, value: string) {
+    setDraft((previous) => ({ ...previous, [input]: value }));
+  }
+
   async function checkProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const profile = prepareMatchingProfile(readProfile(event.currentTarget, questions));
     assessmentRequest.current?.abort();
     const request = new AbortController();
     assessmentRequest.current = request;
@@ -120,18 +131,26 @@ export function VisaNavigator({ directory, initialAssessment }: {
       if (!response.ok) throw new Error("Policy refresh failed.");
       const current: Assessment = await response.json();
       if (request.signal.aborted) return;
+      if (current.availability !== "available") throw new Error("Policy refresh failed.");
+      const currentQuestions = getRuleQuestionGroups(assessmentRoutes(directory, current));
       setAssessment(current);
-      setCheckedProfile(profile);
+      setCheckedProfile(prepareMatchingProfile(readProfile(draft, currentQuestions)));
       setFormMessage("checked");
     } catch {
-      if (!request.signal.aborted) setFormMessage("checkFailed");
+      if (!request.signal.aborted) {
+        // Keep the question definitions for the draft without showing old rules in the directory.
+        setAssessment((previous) => ({ ...previous, availability: "unavailable" }));
+        setFormMessage("checkFailed");
+      }
     } finally {
       if (assessmentRequest.current === request) assessmentRequest.current = null;
     }
   }
 
-  function clearProfile() {
+  function clearProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     assessmentRequest.current?.abort();
+    setDraft({});
     setCheckedProfile(null);
     setFormMessage("cleared");
   }
@@ -224,12 +243,12 @@ export function VisaNavigator({ directory, initialAssessment }: {
               <p id="privacy-note" className="privacy-note">{t("privacy")}</p>
               <label className="field goal-field" htmlFor="profile-goal">
                 <span>{t("goal")}</span>
-                <select id="profile-goal">
+                <select id="profile-goal" value={draft.goal ?? ""} onChange={(event) => updateDraft("goal", event.target.value)}>
                   <option value="">{t("select")}</option>
                   {categories.map(([category, label]) => <option key={category} value={category}>{label[language]}</option>)}
                 </select>
               </label>
-              <RuleQuestions groups={questions} language={language} />
+              <RuleQuestions groups={questions} language={language} draft={draft} onChange={updateDraft} />
               <div className="form-actions">
                 <button className="button button--primary" type="submit" disabled={formMessage === "checking"}>{t("check")} <span aria-hidden="true">→</span></button>
                 <button className="button button--outline" type="reset">{t("clear")}</button>

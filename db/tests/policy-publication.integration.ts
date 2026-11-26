@@ -6,6 +6,7 @@ import { countries, routes, type Route } from "../../src/data/catalog";
 import { changePolicyPublication, stagePolicy } from "../../src/server/policy-publications";
 import { routePolicies, snapshotDigest } from "../../src/server/policy-snapshots";
 import { readPublishedRoutes } from "../../src/server/published-policies";
+import { exerciseAssessmentRecovery } from "./assessment-recovery.integration";
 
 const policies = routes.flatMap((route) => routePolicies(route).map((policy) => ({ route, policy })));
 const legacyVersions = new Map([
@@ -78,7 +79,7 @@ async function seedM2Approvals(pool: Pool) {
   assert.equal(rows.length, legacyVersions.size);
 }
 
-async function exercisePublication(reader: Pool, stager: Pool, reviewer: Pool, upgraded: boolean) {
+async function exercisePublication(reader: Pool, stager: Pool, reviewer: Pool, upgraded: boolean, afterApproval?: () => Promise<void>) {
   const published = async () => visibleVersions(await readPublishedRoutes(routes, reader));
   assert.deepEqual(await published(), [], "Fresh/legacy approvals must not be visible before independent review");
 
@@ -101,6 +102,7 @@ async function exercisePublication(reader: Pool, stager: Pool, reviewer: Pool, u
     assert.equal(approved.review_status, "approved");
   }
   assert.deepEqual(await published(), visibleVersions(routes), "Production reader must see the exact approved Git snapshots");
+  await afterApproval?.();
 
   for (const { route, policy } of policies) {
     const withdrawn = await changePolicyPublication(reviewer, "withdraw", route.id, policy.id, policy.version, testReference);
@@ -116,15 +118,16 @@ async function runScenario(admin: Pool, server: URL, upgraded: boolean) {
   const url = new URL(server);
   url.pathname = "/" + database;
   const owner = new Pool({ connectionString: url.href });
-  const actorPool = (actor: string) => {
+  const actorUrl = (actor: string) => {
     const login = new URL(url);
     login.username = actor;
     login.password = actorPassword;
-    return new Pool({ connectionString: login.href });
+    return login;
   };
-  const reader = actorPool(actors.reader);
-  const stager = actorPool(actors.stager);
-  const reviewer = actorPool(actors.reviewer);
+  const readerUrl = actorUrl(actors.reader);
+  const reader = new Pool({ connectionString: readerUrl.href });
+  const stager = new Pool({ connectionString: actorUrl(actors.stager).href });
+  const reviewer = new Pool({ connectionString: actorUrl(actors.reviewer).href });
   try {
     await runSql(owner, "db/migrations/001_policy.sql");
     await runSql(owner, "db/migrations/002_policy_publication.sql");
@@ -139,7 +142,10 @@ async function runScenario(admin: Pool, server: URL, upgraded: boolean) {
         "CREATE ROLE " + role + " LOGIN PASSWORD '" + actorPassword + "' IN ROLE gvn_policy_" + group,
       ).join("; "));
     }
-    await exercisePublication(reader, stager, reviewer, upgraded);
+    const checkRecovery = !upgraded && process.env.POLICY_TEST_ASSESSMENT_RECOVERY === "1"
+      ? () => exerciseAssessmentRecovery(admin, database, readerUrl)
+      : undefined;
+    await exercisePublication(reader, stager, reviewer, upgraded, checkRecovery);
     console.log("Passed PostgreSQL " + scenario + " publication: separate staging, approval, production read and withdrawal.");
   } finally {
     await Promise.all([owner.end(), reader.end(), stager.end(), reviewer.end()]);

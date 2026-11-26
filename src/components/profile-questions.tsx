@@ -188,6 +188,7 @@ const questions: Record<string, Question> = {
 
 type Field = { input: string; id: string; question: Question };
 type QuestionGroup = { route: Route; fields: Field[] };
+export type ProfileDraft = Readonly<Partial<Record<string, string>>>;
 
 const orderedInputs = Object.keys(questions);
 
@@ -211,31 +212,35 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
   });
 }
 
-export function readProfile(form: HTMLFormElement, groups: readonly QuestionGroup[]): Profile {
-  // Form controls have IDs only, so a native submission sends no personal values.
+export function readProfile(draft: ProfileDraft, groups: readonly QuestionGroup[]): Profile {
   let age: number | undefined;
   let jobOffer: boolean | undefined;
   const answers: Record<string, string | number | boolean> = {};
   for (const { fields } of groups) {
-    for (const { input, id, question } of fields) {
-      const field = form.elements.namedItem(id);
-      if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement) || field.value === "") continue;
+    for (const { input, question } of fields) {
+      const value = draft[input];
+      if (!value) continue;
 
-      if (input === "age") age = Number(field.value);
-      else if (input === "jobOffer") jobOffer = field.value === "yes";
+      if (input === "age") age = Number(value);
+      else if (input === "jobOffer") jobOffer = value === "yes";
       else if (input.startsWith("answer:")) {
         answers[input.slice("answer:".length)] = question.type === "yes-no"
-          ? field.value === "yes"
-          : question.type === "number" ? Number(field.value) : field.value;
+          ? value === "yes"
+          : question.type === "number" ? Number(value) : value;
       }
     }
   }
 
-  const goal = form.elements.namedItem("profile-goal");
-  return { age, jobOffer, goal: goal instanceof HTMLSelectElement ? goal.value || undefined : undefined, answers };
+  return { age, jobOffer, goal: draft.goal || undefined, answers };
 }
 
-function QuestionControl({ id, question, language }: { id: string; question: Question; language: Language }) {
+function QuestionControl({ id, question, language, value, onChange }: {
+  id: string;
+  question: Question;
+  language: Language;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const helpId = question.help ? `${id}-help` : undefined;
   const options = question.type === "choice" ? question.options : [
     { value: "yes", label: copy.yes }, { value: "no", label: copy.no },
@@ -246,9 +251,10 @@ function QuestionControl({ id, question, language }: { id: string; question: Que
       <label htmlFor={id}>{question.label[language]}</label>
       {question.type === "number" ? (
         <input id={id} type="number" min={question.min} max={question.max} step={question.step}
+          value={value} onChange={(event) => onChange(event.target.value)}
           inputMode={question.step === 1 ? "numeric" : "decimal"} aria-describedby={helpId} />
       ) : (
-        <select id={id} aria-describedby={helpId}>
+        <select id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId}>
           <option value="">{copy.unfinished[language]}</option>
           {options.map(({ value, label }) => <option key={value} value={value}>{label[language]}</option>)}
         </select>
@@ -258,7 +264,12 @@ function QuestionControl({ id, question, language }: { id: string; question: Que
   );
 }
 
-export function RuleQuestions({ groups, language }: { groups: readonly QuestionGroup[]; language: Language }) {
+export function RuleQuestions({ groups, language, draft, onChange }: {
+  groups: readonly QuestionGroup[];
+  language: Language;
+  draft: ProfileDraft;
+  onChange: (input: string, value: string) => void;
+}) {
   if (groups.length === 0) return null;
 
   const sections = Object.keys(sectionLabels) as Section[];
@@ -277,8 +288,9 @@ export function RuleQuestions({ groups, language }: { groups: readonly QuestionG
                 <div className="question-section" key={section}>
                   <p className="question-section-title">{sectionLabels[section][language]}</p>
                   <div className="question-grid">
-                    {fieldsInSection.map(({ id, question }) => (
-                      <QuestionControl id={id} question={question} language={language} key={id} />
+                    {fieldsInSection.map(({ id, input, question }) => (
+                      <QuestionControl id={id} question={question} language={language} key={id}
+                        value={draft[input] ?? ""} onChange={(value) => onChange(input, value)} />
                     ))}
                   </div>
                 </div>

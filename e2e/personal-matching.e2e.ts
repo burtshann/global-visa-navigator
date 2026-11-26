@@ -198,6 +198,8 @@ test("keeps answers available for retry when current rules cannot be loaded", as
   await openEnglish(page);
   const goal = page.getByLabel("Main goal");
   await goal.selectOption("post-study");
+  const location = page.locator("#question-uk-graduate-inUk");
+  await location.selectOption("yes");
   const results = await checkProfile(page);
 
   await page.route("**/api/assessment", (route) => route.fulfill({ status: 503 }));
@@ -205,9 +207,43 @@ test("keeps answers available for retry when current rules cannot be loaded", as
   await expect(page.getByRole("status").filter({ hasText: "Current rules could not be loaded" })).toBeVisible();
   await expect(results).toHaveCount(0);
   await expect(goal).toHaveValue("post-study");
+  await expect(location).toHaveValue("yes");
 
   await page.unroute("**/api/assessment");
   await checkProfile(page);
+});
+
+test("retains answers across a valid rule withdrawal and clears even hidden answers", async ({ page }) => {
+  await openEnglish(page);
+  const goal = page.getByLabel("Main goal");
+  const location = page.locator("#question-uk-graduate-inUk");
+  await goal.selectOption("post-study");
+  await location.selectOption("yes");
+  await page.locator("#question-uk-graduate-ukCompletionReported").selectOption("yes");
+  const results = await checkProfile(page);
+
+  const hideRules = () => page.route("**/api/assessment", async (route) => {
+    const live = await route.fetch();
+    await route.fulfill({ response: live, json: { ...await live.json(), policies: {} } });
+  });
+  await hideRules();
+  await checkProfile(page);
+  await expect(location).toHaveCount(0);
+  await expect(results.locator('[data-route-id="uk-graduate"]')).toHaveCount(0);
+
+  await page.unroute("**/api/assessment");
+  await checkProfile(page);
+  await expect(location).toHaveValue("yes");
+  await expect(results.getByText("All checked conditions met", { exact: true })).toBeVisible();
+
+  await hideRules();
+  await checkProfile(page);
+  await expect(location).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear answers" }).click();
+  await expect(goal).toHaveValue("");
+  await page.unroute("**/api/assessment");
+  await checkProfile(page);
+  await expect(location).toHaveValue("");
 });
 
 test.describe("mobile viewport", () => {

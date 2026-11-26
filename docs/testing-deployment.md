@@ -82,6 +82,8 @@ psql "$GVN_MIGRATION_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f db/tests/003_policy_
 
 GitHub Actions 同时在 PostgreSQL 16 服务上运行 `npm run test:db`。本地复现时，将 `POLICY_TEST_ADMIN_URL` 设置为一次性本地 PostgreSQL 实例的 `postgres` 数据库连接串，账号须能创建数据库和登录角色。该测试分别创建空库和带 M2 审批记录的数据库，执行迁移并以不同身份验证入审、独立批准、生产读取和撤回。
 
+CI 还在生产构建上验证规则读取故障和恢复。完成生产构建并准备 Chromium 后，可设置 `POLICY_TEST_ASSESSMENT_RECOVERY=1` 随数据库套件运行。测试会暂停一次性数据库的新连接并断开应用读取会话，再恢复连接，检查刷新返回 503 时不显示过时结果、目录仍可浏览且问卷答案保留在当前标签页。
+
 ### 从 M2 切换政策发布权限
 
 已有 M2 审批记录的数据库使用下列替换快照。各规则的政策条件和来源核验日期沿用原值。

@@ -18,6 +18,11 @@ type PolicyEnvironment = {
   NODE_ENV?: string;
 };
 
+type PublishedRoutes = {
+  availability: "available" | "unavailable";
+  routes: readonly Route[];
+};
+
 const approvedSnapshots = `
   SELECT route_id, policy_key, stage, version, snapshot_sha256, rule_snapshot
   FROM public.gvn_approved_policy_snapshot
@@ -87,23 +92,24 @@ function publicationPool(url: string): Pool {
 export async function loadPublishedRoutes(
   routes: readonly Route[],
   environment: PolicyEnvironment = process.env,
-): Promise<readonly Route[]> {
+): Promise<PublishedRoutes> {
   if (environment.POLICY_DATABASE_URL) {
     if (!isPolicyDatabaseUrl(environment.POLICY_DATABASE_URL)) {
       console.error("Policy database URL must use a named reader login and verified TLS for remote connections. Showing directory only.");
-      return resolvePublishedRoutes(routes, []);
+      return { availability: "unavailable", routes: resolvePublishedRoutes(routes, []) };
     }
     try {
-      return await readPublishedRoutes(routes, publicationPool(environment.POLICY_DATABASE_URL));
+      const published = await readPublishedRoutes(routes, publicationPool(environment.POLICY_DATABASE_URL));
+      return { availability: "available", routes: published };
     } catch {
       console.error("Approved policy snapshots could not be loaded. Showing directory only.");
-      return resolvePublishedRoutes(routes, []);
+      return { availability: "unavailable", routes: resolvePublishedRoutes(routes, []) };
     }
   }
 
   if (environment.NODE_ENV === "development" || environment.NODE_ENV === "test") {
-    return routes;
+    return { availability: "available", routes };
   }
 
-  return resolvePublishedRoutes(routes, []);
+  return { availability: "available", routes: resolvePublishedRoutes(routes, []) };
 }

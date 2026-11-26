@@ -4,19 +4,20 @@ import { evaluatePolicy, type Policy } from "../domain/policy";
 import { loadPublishedRoutes } from "./published-policies";
 
 export type Assessment = {
+  availability: "available" | "unavailable";
   asOf: string;
   localDates: Readonly<Record<string, string>>;
   policies: Readonly<Partial<Record<string, Pick<Route, "policy" | "policies">>>>;
 };
 
 export async function loadAssessment(): Promise<Assessment> {
-  const publishedRoutes = await loadPublishedRoutes(routes);
+  const publication = await loadPublishedRoutes(routes);
   const now = new Date();
   const asOf = assessmentDate(now);
   const localDates: Record<string, string> = {};
   const policies: Record<string, Pick<Route, "policy" | "policies">> = {};
 
-  for (const route of publishedRoutes) {
+  for (const route of publication.routes) {
     const localDate = route.policyTimeZone ? assessmentDate(now, route.policyTimeZone) : asOf;
     if (route.policyTimeZone) localDates[route.id] = localDate;
     const isUsable = (policy: Policy) => evaluatePolicy(policy, {}, localDate).coverageIssue === null;
@@ -25,5 +26,5 @@ export async function loadAssessment(): Promise<Assessment> {
     if (policy || variants?.length) policies[route.id] = { policy, policies: variants };
   }
 
-  return { asOf, localDates, policies };
+  return { availability: publication.availability, asOf, localDates, policies };
 }

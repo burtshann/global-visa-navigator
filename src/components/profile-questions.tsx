@@ -44,6 +44,15 @@ const questions: Record<string, Question> = {
     label: { en: "Are you applying as the main applicant for your first Skilled Worker grant?", zh: "你是否作为主申请人申请，而且此前从未持有 Skilled Worker 许可？" },
     help: { en: "This check covers your first grant. Extensions and changes after a Skilled Worker grant have separate rules.", zh: "本次核对适用于首次获批。已有 Skilled Worker 许可后的续签或变更另有规则。" },
   },
+  "answer:ukSkilledApplyingFromAbroad": {
+    type: "yes-no", section: "application",
+    label: { en: "Will you submit your Skilled Worker application from outside the UK?", zh: "你会从英国境外提交 Skilled Worker 申请吗？" },
+  },
+  "answer:ukSkilledUsingAfghanNationality": {
+    type: "yes-no", section: "application",
+    label: { en: "If applying from outside the UK, will you use Afghan nationality as your main nationality on this application?", zh: "如从英国境外申请，你会将阿富汗国籍填为本次申请的主要国籍吗？" },
+    help: { en: "If you have two nationalities, answer for the passport or travel document used on this application. Leave it blank if you are unsure or applying from within the UK.", zh: "如有双重国籍，请按本次申请使用的护照或旅行证件回答。如不确定或从英国境内申请，请留空。" },
+  },
   "answer:ukSkilledAge": {
     type: "number", section: "application", min: 0, max: 120, step: 1,
     label: { en: "Age on the Skilled Worker application date", zh: "提交 Skilled Worker 申请当天的年龄" },

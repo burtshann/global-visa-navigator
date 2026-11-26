@@ -5,11 +5,11 @@ import type { Route } from "../data/catalog";
 import { categoryLabels, countries, type Category, type Country } from "../data/destinations";
 import { evaluatePathway, type Evaluation, type Policy, type Profile } from "../domain/policy";
 import { prepareMatchingProfile } from "../data/matching-profile";
+import type { Assessment } from "../server/assessment";
 import { copy } from "./navigator-copy";
 import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
 import { getRuleQuestionGroups, readProfile, RuleQuestions } from "./profile-questions";
 
-type MatchRun = { profile: Profile; asOf: string };
 type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
 const priority: Record<Evaluation["status"], number> = {
@@ -62,25 +62,28 @@ function MatchCard({ route, policies, language, localDate }: {
   );
 }
 
-export function VisaNavigator({ routes, asOf, localDates }: {
-  routes: readonly Route[];
-  asOf: string;
-  localDates: Readonly<Record<string, string>>;
+export function VisaNavigator({ directory, initialAssessment }: {
+  directory: readonly Route[];
+  initialAssessment: Assessment;
 }) {
   const [language, setLanguage] = useState<Language>("zh");
   const [countryFilter, setCountryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
-  const [matchRun, setMatchRun] = useState<MatchRun | null>(null);
-  const [formMessage, setFormMessage] = useState<"checked" | "cleared" | null>(null);
+  const [assessment, setAssessment] = useState(initialAssessment);
+  const [checkedProfile, setCheckedProfile] = useState<Profile | null>(null);
+  const [formMessage, setFormMessage] = useState<"checking" | "checked" | "cleared" | "checkFailed" | null>(null);
   const [comparison, setComparison] = useState<string[]>([]);
   const [showComparison, setShowComparison] = useState(false);
 
   const resultsTitle = useRef<HTMLHeadingElement>(null);
+  const assessmentRequest = useRef<AbortController | null>(null);
+  const { asOf, localDates } = assessment;
+  const routes = directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
   const routesById = new Map(routes.map((route) => [route.id, route]));
   const questions = getRuleQuestionGroups(routes);
-  const matchedRoutes = matchRun ? routes.flatMap((route) => {
+  const matchedRoutes = checkedProfile ? routes.flatMap((route) => {
     const policies = routePolicies(route)
-      .map((policy) => ({ policy, ...evaluatePathway(policy, matchRun.profile, localDates[route.id] ?? matchRun.asOf, [route.category]) }))
+      .map((policy) => ({ policy, ...evaluatePathway(policy, checkedProfile, localDates[route.id] ?? asOf, [route.category]) }))
       .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
       .sort((first, second) => priority[first.outcome.status] - priority[second.outcome.status]);
     return policies.length > 0 ? [{ route, policies }] : [];
@@ -92,10 +95,10 @@ export function VisaNavigator({ routes, asOf, localDates }: {
   );
 
   useEffect(() => {
-    if (!matchRun) return;
+    if (!checkedProfile) return;
     resultsTitle.current?.focus({ preventScroll: true });
     resultsTitle.current?.scrollIntoView({ block: "start" });
-  }, [matchRun]);
+  }, [checkedProfile]);
 
   const t = (key: keyof typeof copy) => copy[key][language];
 
@@ -104,15 +107,32 @@ export function VisaNavigator({ routes, asOf, localDates }: {
     document.documentElement.lang = nextLanguage === "zh" ? "zh-Hans" : "en";
   }
 
-  function checkProfile(event: FormEvent<HTMLFormElement>) {
+  async function checkProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const profile = prepareMatchingProfile(readProfile(event.currentTarget, questions));
-    setMatchRun({ profile, asOf });
-    setFormMessage("checked");
+    assessmentRequest.current?.abort();
+    const request = new AbortController();
+    assessmentRequest.current = request;
+    setCheckedProfile(null);
+    setFormMessage("checking");
+    try {
+      const response = await fetch("/api/assessment", { cache: "no-store", signal: request.signal });
+      if (!response.ok) throw new Error("Policy refresh failed.");
+      const current: Assessment = await response.json();
+      if (request.signal.aborted) return;
+      setAssessment(current);
+      setCheckedProfile(profile);
+      setFormMessage("checked");
+    } catch {
+      if (!request.signal.aborted) setFormMessage("checkFailed");
+    } finally {
+      if (assessmentRequest.current === request) assessmentRequest.current = null;
+    }
   }
 
   function clearProfile() {
-    setMatchRun(null);
+    assessmentRequest.current?.abort();
+    setCheckedProfile(null);
     setFormMessage("cleared");
   }
 
@@ -211,7 +231,7 @@ export function VisaNavigator({ routes, asOf, localDates }: {
               </label>
               <RuleQuestions groups={questions} language={language} />
               <div className="form-actions">
-                <button className="button button--primary" type="submit">{t("check")} <span aria-hidden="true">→</span></button>
+                <button className="button button--primary" type="submit" disabled={formMessage === "checking"}>{t("check")} <span aria-hidden="true">→</span></button>
                 <button className="button button--outline" type="reset">{t("clear")}</button>
                 <span className="form-message" role="status">{formMessage && t(formMessage)}</span>
               </div>
@@ -219,7 +239,7 @@ export function VisaNavigator({ routes, asOf, localDates }: {
           </div>
         </section>
 
-        {matchRun && (
+        {checkedProfile && (
           <section id="personal-results" className="section personal-results" aria-labelledby="personal-results-title">
             <div className="container">
               <div className="section-heading">
@@ -227,11 +247,11 @@ export function VisaNavigator({ routes, asOf, localDates }: {
                 <p>{t("personalResultsIntro")}</p>
               </div>
               <p className="policy-meta match-date">
-                {t("assessmentDate")} <time dateTime={matchRun.asOf}>{matchRun.asOf}</time>
+                {t("assessmentDate")} <time dateTime={asOf}>{asOf}</time>
               </p>
               {matchedRoutes.length === 0 ? (
                 <div className="empty-state">
-                  <p>{t(matchRun.profile.goal ? "personalEmpty" : "personalEmptyNoGoal")}</p>
+                  <p>{t(checkedProfile.goal ? "personalEmpty" : "personalEmptyNoGoal")}</p>
                   <a className="text-link" href="#pathways">{t("goToDirectory")}</a>
                 </div>
               ) : (

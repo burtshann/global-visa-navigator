@@ -42,6 +42,8 @@ export const copy = {
   clear: { en: "Clear answers", zh: "清除答案" },
   cleared: { en: "Answers and results cleared.", zh: "已清除答案及匹配结果。" },
   checked: { en: "Rule checks updated.", zh: "已更新规则核对结果。" },
+  checking: { en: "Fetching current rules…", zh: "正在获取当前规则…" },
+  checkFailed: { en: "Current rules could not be loaded. Your answers are still here. Please try again.", zh: "暂时无法加载当前规则。你的答案仍在本页，请重试。" },
   pathwayQuestions: { en: "Pathway-specific questions", zh: "路径专项问题" },
   pathwayQuestionsIntro: {
     en: "Answer the questions for the pathways you want to check.",

@@ -6,18 +6,26 @@ const appendix = "https://www.gov.uk/guidance/immigration-rules/immigration-rule
 const sponsorshipRules = `${appendix}#points-for-sponsorship-mandatory`;
 const introduction = "https://www.gov.uk/government/publications/statement-of-changes-to-the-immigration-rules-hc-813-22-october-2020";
 const englishChange = "https://www.gov.uk/government/publications/statement-of-changes-to-the-immigration-rules-hc-1333-14-october-2025/statement-of-changes-to-the-immigration-rules-hc-1333-14-october-2025-accessible-version";
+const visaBrakeGuidance = "https://www.gov.uk/guidance/visa-brake-changes-to-the-uk-visa-system";
 const verified = { lastVerifiedAt: "2026-11-23T14:16:05Z", reviewStatus: "verified" } as const;
 const originalSource = { ...verified, effectiveFrom: "2020-12-01", effectiveDateUrl: introduction };
 const englishSource = { ...verified, effectiveFrom: "2026-01-08", effectiveDateUrl: englishChange };
+const visaBrakeSource = {
+  url: appendix + "#eligibility-requirements-for-a-skilled-worker",
+  effectiveFrom: "2026-03-26",
+  effectiveDateUrl: visaBrakeGuidance,
+  lastVerifiedAt: "2026-11-26",
+  reviewStatus: "verified",
+} as const;
 
 export const ukSkilledWorkerPolicy: Policy = {
   id: "uk-skilled-worker-initial",
-  version: "2026-11-23.1",
+  version: "2026-11-26.1",
   stage: "application",
   name: t("First Skilled Worker application", "首次申请技术工人签证"),
   scope: t(
-    "This check covers age, a job-specific Certificate of Sponsorship, the sponsor’s rating and authorisation, and English evidence for a first-time main applicant. Job codes, salary, maintenance, suitability and full CoS validity still need review. Dependants, extensions and changes to existing Skilled Worker permission are outside this check.",
-    "本核查适用于首次申请的主申请人，涵盖年龄、针对该岗位的担保证明、担保方评级及资质和英语证明。职业代码、薪资、生活费、适格性及担保证明的完整有效性仍须核实。家属、续签及变更现有技术工人许可不在核查范围内。",
+    "This check covers the nationality restriction for entry clearance, age, a job-specific Certificate of Sponsorship, the sponsor’s rating and authorisation, and English evidence for a first-time main applicant. Job codes, salary, maintenance, suitability and full CoS validity still need review. Dependants, extensions and changes to existing Skilled Worker permission are outside this check.",
+    "本核查适用于首次申请的主申请人，涵盖入境许可的国籍限制、年龄、针对该岗位的担保证明、担保方评级及资质和英语证明。职业代码、薪资、生活费、适格性及担保证明的完整有效性仍须核实。家属、续签及变更现有技术工人许可不在核查范围内。",
   ),
   conditions: [
     {
@@ -32,6 +40,31 @@ export const ukSkilledWorkerPolicy: Policy = {
         url: appendix,
         applicableWhen: t("This screening scope excludes cases with prior Skilled Worker permission. See SW 4.1 and SW 5.3 for the prior-permission exceptions.", "本核查范围不含曾获技术工人许可的情况。既往许可相关例外见 SW 4.1 和 SW 5.3。"),
         evidence: t("The current rules have separate provisions for people who previously held Skilled Worker permission. This limited check applies the initial-application conditions.", "现行规则对曾获技术工人许可者另有规定。本核查采用首次申请条件。"),
+      },
+    },
+    {
+      id: "uk-sw-entry-clearance",
+      input: "answer:ukSkilledApplyingFromAbroad",
+      operator: "eq",
+      expected: true,
+      label: t("Applying from outside the UK for entry clearance", "从英国境外提交入境许可申请"),
+      nextStep: t("Confirm whether you will apply from outside the UK or apply for permission to stay from within the UK.", "确认你将从英国境外申请入境许可，还是在英国境内申请居留许可。"),
+      source: {
+        ...visaBrakeSource,
+        applicableWhen: t("The restriction in SW 3.3 applies to entry clearance applications.", "SW 3.3 的限制适用于入境许可申请。"),
+      },
+    },
+    {
+      id: "uk-sw-entry-nationality",
+      input: "answer:ukSkilledUsingAfghanNationality",
+      operator: "eq",
+      expected: false,
+      label: t("The main nationality used for entry clearance is other than Afghan", "入境许可申请所用主要国籍为阿富汗以外的国籍"),
+      nextStep: t("Check the Home Office visa brake guidance. Skilled Worker entry clearance applications using Afghan nationality are refused even with a valid CoS.", "查阅英国内政部的签证限制指南。以阿富汗国籍申请 Skilled Worker 入境许可，即使有有效的担保证明也会被拒。"),
+      source: {
+        ...visaBrakeSource,
+        applicableWhen: t("Main applicants who apply for Skilled Worker entry clearance, SW 3.3.", "申请 Skilled Worker 入境许可的主申请人，见 SW 3.3。"),
+        evidence: t("The Home Office uses the main nationality in the application. For a dual national applying under a different nationality, this restriction does not apply.", "英国内政部以此次申请所填的主要国籍为准。双重国籍申请人以其他国籍申请时，不受此项限制。"),
       },
     },
     {
@@ -97,6 +130,11 @@ export const ukSkilledWorkerPolicy: Policy = {
     requirement: {
       kind: "all",
       children: [
+        {
+          kind: "when",
+          test: { kind: "condition", conditionId: "uk-sw-entry-clearance" },
+          requirement: { kind: "condition", conditionId: "uk-sw-entry-nationality" },
+        },
         { kind: "condition", conditionId: "uk-sw-age" },
         { kind: "condition", conditionId: "uk-sw-job-cos" },
         { kind: "condition", conditionId: "uk-sw-sponsor" },

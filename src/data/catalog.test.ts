@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "../domain/policy";
 import { categoryLabels, countries, routes } from "./catalog";
 
-const verifiedDate = "2026-11-23";
+const verifiedDate = "2026-11-26";
 
 describe("published visa catalog", () => {
   it("covers all nine destinations and all five categories with official links", () => {

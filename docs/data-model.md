@@ -47,11 +47,15 @@
 
 工资表的年龄、行业或月薪资料不足时，保留待核实状态。续签、COMPASS 及其豁免、公平考量框架、特殊政策安排和完整申请资格均须单独确认。雇主可使用人力部自评工具核实对应情形。 [MOM 自评工具](https://www.mom.gov.sg/eservices/services/employment-s-pass-self-assessment-tool)
 
+每次提交问卷时，页面重新获取服务器按当前政策日期筛选的规则。问卷答案留在浏览器内，核对结果显示实际使用的新加坡政策日期。
+
 ### 第三阶段英国 Skilled Worker
 
 2026 年 11 月 23 日核对首次主申请人适用规则。核对不低于 18 岁、由雇主分配适用于该岗位和申请类别的担保证明、雇主的 A 级 Skilled Worker 担保资质及许可范围，以及可接受的首次申请 B2 英语证明。境外入境许可申请的担保证明还包括 Defined CoS 要求。年龄和担保规则以 2020 年 12 月 1 日生效的变更为依据，首次申请 B2 要求自 2026 年 1 月 8 日生效。核对依据为用户报告，证明材料仍需主管机关核验。 [Skilled Worker 附录](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-skilled-worker) · [HC 813](https://www.gov.uk/government/publications/statement-of-changes-to-the-immigration-rules-hc-813-22-october-2020) · [持牌担保人登记册](https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers) · [英语要求附录](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-english-language) · [HC 1333](https://www.gov.uk/government/publications/statement-of-changes-to-the-immigration-rules-hc-1333-14-october-2025/statement-of-changes-to-the-immigration-rules-hc-1333-14-october-2025-accessible-version)
 
 完整担保证明有效性、职业代码、薪资及职业工资标准、生活费证明、适格性和续签、变更雇主或附属申请的规则均须单独核实。
+
+2026 年 11 月 26 日核对 SW 3.3。自 2026 年 3 月 26 日起，从英国境外以阿富汗国籍申请入境许可的 Skilled Worker 主申请人受此限制。以其他国籍申请的双重国籍人员按本次申报的国籍核对。境内申请跳过此项，申请地点未知或境外申请所用国籍未知时显示待补充信息。 [英国内政部签证限制指南](https://www.gov.uk/guidance/visa-brake-changes-to-the-uk-visa-system)
 
 ## 规则与评估
 

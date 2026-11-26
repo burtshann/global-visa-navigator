@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { rm, writeFile } from "node:fs/promises";
 
 async function openEnglish(page: Page) {
   await page.goto("/");
@@ -129,6 +130,7 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
   await page.getByLabel("Main goal").selectOption("skilled-work");
   const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
   await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
   await answer("ukSkilledAge").fill("18");
   await answer("ukSkilledJobCos").selectOption("no");
   await answer("ukSkilledSponsorRated").selectOption("yes");
@@ -140,8 +142,72 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
   await answer("ukSkilledJobCos").selectOption("yes");
   await answer("ukSkilledEnglishBasis").selectOption("other-verified-evidence");
   await checkProfile(page);
+  await expect(skilledWorker.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await answer("ukSkilledUsingAfghanNationality").selectOption("yes");
+  await checkProfile(page);
+  await expect(skilledWorker.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(skilledWorker.getByText(/using Afghan nationality are refused/)).toBeVisible();
+
+  await answer("ukSkilledUsingAfghanNationality").selectOption("no");
+  await checkProfile(page);
+  await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
+
+  await answer("ukSkilledApplyingFromAbroad").selectOption("no");
+  await answer("ukSkilledUsingAfghanNationality").selectOption("");
+  await checkProfile(page);
   await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
   await expect(skilledWorker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+});
+
+test("refreshes the Singapore rule after local midnight without reloading or sending answers", async ({ page }) => {
+  const serverClock = ".next/e2e-assessment-clock";
+  try {
+    await writeFile(serverClock, "2026-12-31T15:59:00Z");
+    await openEnglish(page);
+    await page.getByLabel("Main goal").selectOption("skilled-work");
+    const answer = (name: string) => page.locator("#question-sg-employment-pass-" + name);
+    await answer("sgEpInitialApplication").selectOption("yes");
+    await answer("sgEpSingaporeJobOffer").selectOption("yes");
+    await answer("sgEpAge").fill("30");
+    await answer("sgEpFinancialSector").selectOption("no");
+    await answer("sgEpFixedMonthlySalarySgd").fill("7300");
+    const results = await checkProfile(page);
+    const employmentPass = results.locator('[data-route-id="sg-employment-pass"]');
+    await expect(employmentPass.locator("time")).toHaveText("2026-12-31");
+    await expect(employmentPass.getByText(/7,223/)).toBeVisible();
+    await expect(employmentPass.getByText("All checked conditions met", { exact: true })).toBeVisible();
+
+    await writeFile(serverClock, "2026-12-31T16:01:00Z");
+    const metadata = page.waitForResponse((response) => response.url().endsWith("/api/assessment"));
+    await checkProfile(page);
+    const response = await metadata;
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(response.request().method()).toBe("GET");
+    expect(response.request().postData()).toBeNull();
+    await expect(employmentPass.locator("time")).toHaveText("2027-01-01");
+    await expect(employmentPass.getByText(/7,750/)).toBeVisible();
+    await expect(employmentPass.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+    await expect(answer("sgEpFixedMonthlySalarySgd")).toHaveValue("7300");
+  } finally {
+    await rm(serverClock, { force: true });
+  }
+});
+
+test("keeps answers available for retry when current rules cannot be loaded", async ({ page }) => {
+  await openEnglish(page);
+  const goal = page.getByLabel("Main goal");
+  await goal.selectOption("post-study");
+  const results = await checkProfile(page);
+
+  await page.route("**/api/assessment", (route) => route.fulfill({ status: 503 }));
+  await page.getByRole("button", { name: "Check published rules" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Current rules could not be loaded" })).toBeVisible();
+  await expect(results).toHaveCount(0);
+  await expect(goal).toHaveValue("post-study");
+
+  await page.unroute("**/api/assessment");
+  await checkProfile(page);
 });
 
 test.describe("mobile viewport", () => {

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { evaluatePathway, evaluatePolicy, type Profile } from "../domain/policy";
 import { ukSkilledWorkerPolicy as policy } from "./uk-skilled-worker";
 
-const asOf = "2026-11-23";
+const asOf = "2026-11-26";
 const completeAnswers = {
   ukSkilledWorkerInitial: true,
+  ukSkilledApplyingFromAbroad: false,
   ukSkilledAge: 18,
   ukSkilledJobCos: true,
   ukSkilledSponsorRated: true,
@@ -65,6 +66,32 @@ describe("first-time UK Skilled Worker principal application check", () => {
     const outcome = evaluate({ ...completeAnswers, ukSkilledWorkerInitial: undefined });
     expect(outcome.status).toBe("profile-incomplete");
     expect(outcome.checks.map(({ condition }) => condition.id)).toEqual(["uk-sw-first-application"]);
+  });
+
+  it("fails the entry clearance requirement when the main applicant uses Afghan nationality", () => {
+    const outcome = evaluate({
+      ...completeAnswers, ukSkilledApplyingFromAbroad: true, ukSkilledUsingAfghanNationality: true,
+    });
+    expect(outcome.status).toBe("conditions-not-met");
+    expect(outcome.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "uk-sw-entry-nationality" }), status: "fail",
+    }));
+  });
+
+  it("does not apply the restriction in the UK or when using another nationality from abroad", () => {
+    expect(evaluate({ ...completeAnswers, ukSkilledUsingAfghanNationality: true }).status).toBe("conditions-met");
+    expect(evaluate({
+      ...completeAnswers, ukSkilledApplyingFromAbroad: true, ukSkilledUsingAfghanNationality: false,
+    }).status).toBe("conditions-met");
+  });
+
+  it("keeps the outcome incomplete for an unknown application location or an unknown nationality abroad", () => {
+    expect(evaluate({ ...completeAnswers, ukSkilledApplyingFromAbroad: undefined }).status).toBe("profile-incomplete");
+    const outcome = evaluate({ ...completeAnswers, ukSkilledApplyingFromAbroad: true });
+    expect(outcome.status).toBe("profile-incomplete");
+    expect(outcome.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "uk-sw-entry-nationality" }), status: "unknown",
+    }));
   });
 
   it("records the effective dates for the original conditions and the current first-time English requirement", () => {

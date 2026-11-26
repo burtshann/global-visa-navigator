@@ -63,6 +63,11 @@ export function resolvePublishedRoutes(
   });
 }
 
+export async function readPublishedRoutes(routes: readonly Route[], pool: Pool): Promise<readonly Route[]> {
+  const { rows } = await pool.query<PublishedPolicy>(approvedSnapshots);
+  return resolvePublishedRoutes(routes, rows);
+}
+
 let database: { url: string; pool: Pool } | undefined;
 
 function publicationPool(url: string): Pool {
@@ -89,8 +94,7 @@ export async function loadPublishedRoutes(
       return resolvePublishedRoutes(routes, []);
     }
     try {
-      const { rows } = await publicationPool(environment.POLICY_DATABASE_URL).query<PublishedPolicy>(approvedSnapshots);
-      return resolvePublishedRoutes(routes, rows);
+      return await readPublishedRoutes(routes, publicationPool(environment.POLICY_DATABASE_URL));
     } catch {
       console.error("Approved policy snapshots could not be loaded. Showing directory only.");
       return resolvePublishedRoutes(routes, []);

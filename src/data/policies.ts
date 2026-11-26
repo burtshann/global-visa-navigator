@@ -18,7 +18,7 @@ const opportunityCardSource = {
 
 export const ukGraduatePolicy = {
   id: "uk-graduate",
-  version: "2026-11-23.1",
+  version: "2026-11-26.1",
   stage: "application",
   conditions: [
     {
@@ -68,7 +68,7 @@ export const ukGraduatePolicy = {
 
 export const deOpportunityCardPolicy = {
   id: "de-opportunity-card-skilled-worker",
-  version: "2026-11-23.2",
+  version: "2026-11-26.1",
   stage: "application",
   name: { en: "Skilled worker mechanism", zh: "技术人才路径" },
   scope: {

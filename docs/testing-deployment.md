@@ -80,6 +80,23 @@ psql "$GVN_MIGRATION_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f db/tests/002_policy_
 psql "$GVN_MIGRATION_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f db/tests/003_policy_permissions_smoke.sql
 ```
 
+GitHub Actions 同时在 PostgreSQL 16 服务上运行 `npm run test:db`。本地复现时，将 `POLICY_TEST_ADMIN_URL` 设置为一次性本地 PostgreSQL 实例的 `postgres` 数据库连接串，账号须能创建数据库和登录角色。该测试分别创建空库和带 M2 审批记录的数据库，执行迁移并以不同身份验证入审、独立批准、生产读取和撤回。
+
+### 从 M2 切换政策发布权限
+
+已有 M2 审批记录的数据库使用下列替换快照。各规则的政策条件和来源核验日期沿用原值。
+
+| 路径 | 政策标识 | M2 版本 | 重新入审版本 |
+| --- | --- | --- | --- |
+| `uk-graduate` | `uk-graduate` | `2026-11-23.1` | `2026-11-26.1` |
+| `de-opportunity-card` | `de-opportunity-card-skilled-worker` | `2026-11-23.2` | `2026-11-26.1` |
+| `de-opportunity-card` | `de-opportunity-card-points` | `2026-11-23.2` | `2026-11-26.1` |
+
+1. 在隔离的 M2 数据库副本演练升级，并按已有运维流程保留数据库备份和当前应用版本。准备待切换的 Git 版本和三种独立数据库登录。
+2. 在维护窗口暂停对外的规则评估，再应用迁移 003。该迁移保留旧审批历史，生产只读视图从此忽略缺少独立身份审计的旧审批。
+3. 从待部署的 Git 版本由入审者提交表中的新版本，再由独立审核者逐项核对并批准。确认只读账号可以读取新版本以及部署计划所需的已获批快照。
+4. 由负责人切换应用版本和只读连接。在该版本验收审批版本、规则日期和对外评估后再恢复服务。空库安装依次应用 001 至 003，再直接以当前 Git 版本入审、批准及启用规则。
+
 ## 人工审核与发布
 
 在已核对官方证据的 Git 版本中操作。分别为入审和审批操作设置相应账号的 `POLICY_EDITOR_DATABASE_URL`。数据库从登录会话记录操作者身份。使用 `<reference>` 关联 GitHub 审核或证据记录。

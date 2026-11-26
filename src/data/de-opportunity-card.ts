@@ -204,7 +204,7 @@ const score: RuleExpression = {
 
 export const deOpportunityCardPointsPolicy: Policy = {
   id: "de-opportunity-card-points",
-  version: "2026-11-23.2",
+  version: "2026-11-26.1",
   name: t("Points mechanism", "积分路径"),
   scope,
   stage: "application",

@@ -2,6 +2,8 @@ import type { Localized, Policy } from "@/domain/policy";
 import { deOpportunityCardPointsPolicy } from "./de-opportunity-card";
 import type { Category, CountryId } from "./destinations";
 import { deOpportunityCardPolicy, ukGraduatePolicy } from "./policies";
+import { sgEmploymentPassPolicies } from "./sg-employment-pass";
+import { ukSkilledWorkerPolicy } from "./uk-skilled-worker";
 
 export { categoryLabels, countries } from "./destinations";
 export type { Category, Country, CountryId } from "./destinations";
@@ -16,6 +18,7 @@ export type Route = Readonly<{
   policy?: Policy;
   policies?: readonly Policy[];
   scope?: Localized;
+  policyTimeZone?: string;
 }>;
 
 export const routes: readonly Route[] = [
@@ -71,6 +74,7 @@ export const routes: readonly Route[] = [
     name: { en: "Skilled Worker visa", zh: "Skilled Worker 技术工作签证" },
     description: { en: "A sponsored employment route for an eligible job in the UK.", zh: "面向在英国从事符合要求岗位的雇主担保工作路径。" },
     officialUrl: "https://www.gov.uk/skilled-worker-visa",
+    policy: ukSkilledWorkerPolicy,
   },
   {
     id: "uk-student", countryId: "GB", category: "study",
@@ -134,9 +138,11 @@ export const routes: readonly Route[] = [
   },
   {
     id: "sg-employment-pass", countryId: "SG", category: "skilled-work",
+    policyTimeZone: "Asia/Singapore",
     name: { en: "Employment Pass", zh: "就业准证（EP）" },
     description: { en: "Singapore's work pass for foreign professionals, managers and executives.", zh: "新加坡面向外籍专业人员、管理人员及高管的工作准证。" },
     officialUrl: "https://www.mom.gov.sg/passes-and-permits/employment-pass",
+    policies: sgEmploymentPassPolicies,
   },
   {
     id: "sg-student", countryId: "SG", category: "study",

@@ -42,6 +42,8 @@ export const copy = {
   clear: { en: "Clear answers", zh: "清除答案" },
   cleared: { en: "Answers and results cleared.", zh: "已清除答案及匹配结果。" },
   checked: { en: "Rule checks updated.", zh: "已更新规则核对结果。" },
+  checking: { en: "Fetching current rules…", zh: "正在获取当前规则…" },
+  checkFailed: { en: "Current rules could not be loaded. Your answers are still here. Please try again.", zh: "暂时无法加载当前规则。你的答案仍在本页，请重试。" },
   pathwayQuestions: { en: "Pathway-specific questions", zh: "路径专项问题" },
   pathwayQuestionsIntro: {
     en: "Answer the questions for the pathways you want to check.",
@@ -130,6 +132,8 @@ export const copy = {
   effectiveUnknown: { en: "No date identified in the cited source", zh: "引用来源中未确认具体日期" },
   unavailable: { en: "Unavailable", zh: "暂无" },
   assessmentDate: { en: "Check date (UTC)", zh: "核对日期（UTC）" },
+  localAssessmentDate: { en: "Local policy date", zh: "当地政策核对日期" },
+  minimumForCase: { en: "Minimum for these answers", zh: "这些条件适用的最低门槛" },
   backToTop: { en: "Back to top", zh: "返回顶部" },
   languageControl: { en: "Display language", zh: "界面语言" },
 } satisfies Record<string, Localized>;

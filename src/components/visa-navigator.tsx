@@ -5,11 +5,11 @@ import type { Route } from "../data/catalog";
 import { categoryLabels, countries, type Category, type Country } from "../data/destinations";
 import { evaluatePathway, type Evaluation, type Policy, type Profile } from "../domain/policy";
 import { prepareMatchingProfile } from "../data/matching-profile";
+import type { Assessment } from "../server/assessment";
 import { copy } from "./navigator-copy";
 import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
-import { getRuleQuestionGroups, readProfile, RuleQuestions } from "./profile-questions";
+import { getRuleQuestionGroups, readProfile, RuleQuestions, type ProfileDraft } from "./profile-questions";
 
-type MatchRun = { profile: Profile; asOf: string };
 type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
 const priority: Record<Evaluation["status"], number> = {
@@ -27,10 +27,15 @@ function routePriority(policies: readonly CheckedPolicy[]) {
   return Math.min(...policies.map(({ outcome }) => priority[outcome.status]));
 }
 
-function MatchCard({ route, policies, language }: {
+function assessmentRoutes(directory: readonly Route[], assessment: Assessment) {
+  return directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
+}
+
+function MatchCard({ route, policies, language, localDate }: {
   route: Route;
   policies: readonly CheckedPolicy[];
   language: Language;
+  localDate?: string;
 }) {
   const country = countriesById.get(route.countryId);
   const relevance = policies[0]?.relevance;
@@ -40,6 +45,7 @@ function MatchCard({ route, policies, language }: {
     <li className="route-card match-card" data-route-id={route.id}>
       <p className="route-context"><span aria-hidden="true">{country?.flag}</span> {country?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}</p>
       <h3>{route.name[language]}</h3>
+      {localDate && <p className="policy-meta">{t("localAssessmentDate")} <time dateTime={localDate}>{localDate}</time> ({route.policyTimeZone})</p>}
       <dl className="match-statuses">
         <div>
           <dt>{t("alignment")}</dt>
@@ -60,21 +66,32 @@ function MatchCard({ route, policies, language }: {
   );
 }
 
-export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf: string }) {
+export function VisaNavigator({ directory, initialAssessment }: {
+  directory: readonly Route[];
+  initialAssessment: Assessment;
+}) {
   const [language, setLanguage] = useState<Language>("zh");
   const [countryFilter, setCountryFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
-  const [matchRun, setMatchRun] = useState<MatchRun | null>(null);
-  const [formMessage, setFormMessage] = useState<"checked" | "cleared" | null>(null);
+  const [assessment, setAssessment] = useState(initialAssessment);
+  const [draft, setDraft] = useState<ProfileDraft>({});
+  const [checkedProfile, setCheckedProfile] = useState<Profile | null>(null);
+  const [formMessage, setFormMessage] = useState<"checking" | "checked" | "cleared" | "checkFailed" | null>(
+    initialAssessment.availability === "unavailable" ? "checkFailed" : null,
+  );
   const [comparison, setComparison] = useState<string[]>([]);
   const [showComparison, setShowComparison] = useState(false);
 
   const resultsTitle = useRef<HTMLHeadingElement>(null);
+  const assessmentRequest = useRef<AbortController | null>(null);
+  const { asOf, localDates } = assessment;
+  const lastAvailableRoutes = assessmentRoutes(directory, assessment);
+  const routes = assessment.availability === "unavailable" ? directory : lastAvailableRoutes;
   const routesById = new Map(routes.map((route) => [route.id, route]));
-  const questions = getRuleQuestionGroups(routes);
-  const matchedRoutes = matchRun ? routes.flatMap((route) => {
+  const questions = getRuleQuestionGroups(lastAvailableRoutes);
+  const matchedRoutes = checkedProfile && assessment.availability === "available" ? routes.flatMap((route) => {
     const policies = routePolicies(route)
-      .map((policy) => ({ policy, ...evaluatePathway(policy, matchRun.profile, matchRun.asOf, [route.category]) }))
+      .map((policy) => ({ policy, ...evaluatePathway(policy, checkedProfile, localDates[route.id] ?? asOf, [route.category]) }))
       .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
       .sort((first, second) => priority[first.outcome.status] - priority[second.outcome.status]);
     return policies.length > 0 ? [{ route, policies }] : [];
@@ -86,10 +103,10 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
   );
 
   useEffect(() => {
-    if (!matchRun) return;
+    if (!checkedProfile) return;
     resultsTitle.current?.focus({ preventScroll: true });
     resultsTitle.current?.scrollIntoView({ block: "start" });
-  }, [matchRun]);
+  }, [checkedProfile]);
 
   const t = (key: keyof typeof copy) => copy[key][language];
 
@@ -98,15 +115,43 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
     document.documentElement.lang = nextLanguage === "zh" ? "zh-Hans" : "en";
   }
 
-  function checkProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const profile = prepareMatchingProfile(readProfile(event.currentTarget, questions));
-    setMatchRun({ profile, asOf });
-    setFormMessage("checked");
+  function updateDraft(input: string, value: string) {
+    setDraft((previous) => ({ ...previous, [input]: value }));
   }
 
-  function clearProfile() {
-    setMatchRun(null);
+  async function checkProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    assessmentRequest.current?.abort();
+    const request = new AbortController();
+    assessmentRequest.current = request;
+    setCheckedProfile(null);
+    setFormMessage("checking");
+    try {
+      const response = await fetch("/api/assessment", { cache: "no-store", signal: request.signal });
+      if (!response.ok) throw new Error("Policy refresh failed.");
+      const current: Assessment = await response.json();
+      if (request.signal.aborted) return;
+      if (current.availability !== "available") throw new Error("Policy refresh failed.");
+      const currentQuestions = getRuleQuestionGroups(assessmentRoutes(directory, current));
+      setAssessment(current);
+      setCheckedProfile(prepareMatchingProfile(readProfile(draft, currentQuestions)));
+      setFormMessage("checked");
+    } catch {
+      if (!request.signal.aborted) {
+        // Keep the question definitions for the draft without showing old rules in the directory.
+        setAssessment((previous) => ({ ...previous, availability: "unavailable" }));
+        setFormMessage("checkFailed");
+      }
+    } finally {
+      if (assessmentRequest.current === request) assessmentRequest.current = null;
+    }
+  }
+
+  function clearProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    assessmentRequest.current?.abort();
+    setDraft({});
+    setCheckedProfile(null);
     setFormMessage("cleared");
   }
 
@@ -198,14 +243,14 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
               <p id="privacy-note" className="privacy-note">{t("privacy")}</p>
               <label className="field goal-field" htmlFor="profile-goal">
                 <span>{t("goal")}</span>
-                <select id="profile-goal">
+                <select id="profile-goal" value={draft.goal ?? ""} onChange={(event) => updateDraft("goal", event.target.value)}>
                   <option value="">{t("select")}</option>
                   {categories.map(([category, label]) => <option key={category} value={category}>{label[language]}</option>)}
                 </select>
               </label>
-              <RuleQuestions groups={questions} language={language} />
+              <RuleQuestions groups={questions} language={language} draft={draft} onChange={updateDraft} />
               <div className="form-actions">
-                <button className="button button--primary" type="submit">{t("check")} <span aria-hidden="true">→</span></button>
+                <button className="button button--primary" type="submit" disabled={formMessage === "checking"}>{t("check")} <span aria-hidden="true">→</span></button>
                 <button className="button button--outline" type="reset">{t("clear")}</button>
                 <span className="form-message" role="status">{formMessage && t(formMessage)}</span>
               </div>
@@ -213,7 +258,7 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
           </div>
         </section>
 
-        {matchRun && (
+        {checkedProfile && (
           <section id="personal-results" className="section personal-results" aria-labelledby="personal-results-title">
             <div className="container">
               <div className="section-heading">
@@ -221,17 +266,17 @@ export function VisaNavigator({ routes, asOf }: { routes: readonly Route[]; asOf
                 <p>{t("personalResultsIntro")}</p>
               </div>
               <p className="policy-meta match-date">
-                {t("assessmentDate")} <time dateTime={matchRun.asOf}>{matchRun.asOf}</time>
+                {t("assessmentDate")} <time dateTime={asOf}>{asOf}</time>
               </p>
               {matchedRoutes.length === 0 ? (
                 <div className="empty-state">
-                  <p>{t(matchRun.profile.goal ? "personalEmpty" : "personalEmptyNoGoal")}</p>
+                  <p>{t(checkedProfile.goal ? "personalEmpty" : "personalEmptyNoGoal")}</p>
                   <a className="text-link" href="#pathways">{t("goToDirectory")}</a>
                 </div>
               ) : (
                 <ul className="route-grid">
                   {matchedRoutes.map(({ route, policies }) => (
-                    <MatchCard key={route.id} route={route} policies={policies} language={language} />
+                    <MatchCard key={route.id} route={route} policies={policies} language={language} localDate={localDates[route.id]} />
                   ))}
                 </ul>
               )}

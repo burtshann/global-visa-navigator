@@ -1,5 +1,5 @@
 import type { Route } from "../data/catalog";
-import type { Localized, Profile } from "../domain/policy";
+import { policyInputs, type Localized, type Profile } from "../domain/policy";
 import { copy, specificQuestions } from "./navigator-copy";
 import { routePolicies, type Language } from "./policy-result";
 
@@ -39,6 +39,68 @@ const questions: Record<string, Question> = {
   },
   "answer:inUk": { type: "yes-no", section: "application", label: specificQuestions.inUk },
   "answer:ukCompletionReported": { type: "yes-no", section: "application", label: specificQuestions.ukCompletionReported },
+  "answer:ukSkilledWorkerInitial": {
+    type: "yes-no", section: "application",
+    label: { en: "Are you applying as the main applicant for your first Skilled Worker grant?", zh: "你是否作为主申请人申请，而且此前从未持有 Skilled Worker 许可？" },
+    help: { en: "This check covers your first grant. Extensions and changes after a Skilled Worker grant have separate rules.", zh: "本次核对适用于首次获批。已有 Skilled Worker 许可后的续签或变更另有规则。" },
+  },
+  "answer:ukSkilledApplyingFromAbroad": {
+    type: "yes-no", section: "application",
+    label: { en: "Will you submit your Skilled Worker application from outside the UK?", zh: "你会从英国境外提交 Skilled Worker 申请吗？" },
+  },
+  "answer:ukSkilledUsingAfghanNationality": {
+    type: "yes-no", section: "application",
+    label: { en: "If applying from outside the UK, will you use Afghan nationality as your main nationality on this application?", zh: "如从英国境外申请，你会将阿富汗国籍填为本次申请的主要国籍吗？" },
+    help: { en: "If you have two nationalities, answer for the passport or travel document used on this application. Leave it blank if you are unsure or applying from within the UK.", zh: "如有双重国籍，请按本次申请使用的护照或旅行证件回答。如不确定或从英国境内申请，请留空。" },
+  },
+  "answer:ukSkilledAge": {
+    type: "number", section: "application", min: 0, max: 120, step: 1,
+    label: { en: "Age on the Skilled Worker application date", zh: "提交 Skilled Worker 申请当天的年龄" },
+  },
+  "answer:ukSkilledJobCos": {
+    type: "yes-no", section: "application",
+    label: { en: "Has the sponsor assigned a Certificate of Sponsorship for this specific UK job?", zh: "担保雇主是否已就这个英国岗位为你分配担保证书（CoS）？" },
+    help: { en: "Confirm that the CoS is for this job and application location. If you apply from abroad, it must be a defined CoS allocated by the Home Office.", zh: "确认 CoS 对应此次岗位和申请地点。如在英国境外申请，须为内政部配发的 Defined CoS。" },
+  },
+  "answer:ukSkilledSponsorRated": {
+    type: "yes-no", section: "application",
+    label: { en: "Have you verified the employer is an A-rated Skilled Worker sponsor authorised for this job?", zh: "你是否已确认该雇主为获准担保这个岗位的 A 级 Skilled Worker 担保机构？" },
+    help: { en: "Check the official sponsor register and confirm authorisation for this role with the employer.", zh: "查阅官方担保机构登记册，并向雇主核实该岗位的担保授权。" },
+  },
+  "answer:ukSkilledEnglishBasis": {
+    type: "choice", section: "education",
+    label: { en: "Which accepted English evidence can you provide for Skilled Worker?", zh: "你能为 Skilled Worker 提供哪种认可的英语证明？" },
+    options: [
+      { value: "selt-b2", label: { en: "Approved English test within two years, B2 or above in all four skills", zh: "两年内获认可的英语考试，听说读写均达到 B2 或以上" } },
+      { value: "other-verified-evidence", label: { en: "Another permitted form confirmed against Appendix English Language", zh: "已按《英语语言附录》核实的其他获准证明方式" } },
+      { value: "none", label: { en: "No accepted evidence after checking the official alternatives", zh: "核对官方替代方式后，确认没有合规证明" } },
+    ],
+    help: { en: "Leave this unanswered if you are unsure which official evidence applies to you.", zh: "若不确定适用哪种官方证明，请留空。" },
+  },
+  "answer:sgEpInitialApplication": {
+    type: "yes-no", section: "application",
+    label: { en: "Are you checking a new Singapore Employment Pass application?", zh: "你正在核对新的新加坡 Employment Pass 申请吗？" },
+    help: { en: "Use this check for a new application. Renewal dates and requirements differ.", zh: "本次核对适用于新申请。续签的生效日期和要求有所不同。" },
+  },
+  "answer:sgEpSingaporeJobOffer": {
+    type: "yes-no", section: "application",
+    label: { en: "Do you have a job offer in Singapore?", zh: "你是否已获得在新加坡工作的录用邀请？" },
+  },
+  "answer:sgEpAge": {
+    type: "number", section: "application", min: 0, max: 120, step: 1,
+    label: { en: "Age on the Employment Pass application date", zh: "提交 Employment Pass 申请当天的年龄" },
+    help: { en: "Enter completed years. Check with MOM if your application date falls near your birthday.", zh: "填写实足年龄。如申请日接近生日，请向新加坡人力部确认。" },
+  },
+  "answer:sgEpFinancialSector": {
+    type: "yes-no", section: "finance",
+    label: { en: "Is the employer classified by MOM as financial services?", zh: "雇主在人力部的行业分类是否属于金融服务业？" },
+    help: { en: "Choose No only if the employer confirms another classification. Leave blank if it is unknown.", zh: "仅在雇主确认属于其他行业时选择「否」。分类未知时请留空。" },
+  },
+  "answer:sgEpFixedMonthlySalarySgd": {
+    type: "number", section: "finance", min: 0, step: 0.01,
+    label: { en: "Offered fixed monthly salary (SGD)", zh: "录用邀请中的固定月薪（新加坡元）" },
+    help: { en: "Enter the basic monthly salary plus fixed monthly allowances. Exclude variable bonuses, commission, overtime and benefits in kind.", zh: "填写基本月薪与每月固定津贴之和。浮动奖金、佣金、加班费及实物福利不计入。" },
+  },
   "answer:outsideEuEfta": { type: "yes-no", section: "application", label: specificQuestions.outsideEuEfta },
   "answer:deRecognizedQualification": { type: "yes-no", section: "education", label: specificQuestions.deRecognizedQualification },
   "answer:deLivelihoodEvidence": { type: "yes-no", section: "finance", label: specificQuestions.deLivelihoodEvidence },
@@ -126,13 +188,14 @@ const questions: Record<string, Question> = {
 
 type Field = { input: string; id: string; question: Question };
 type QuestionGroup = { route: Route; fields: Field[] };
+export type ProfileDraft = Readonly<Partial<Record<string, string>>>;
 
 const orderedInputs = Object.keys(questions);
 
 export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[] {
   const seen = new Set<string>();
   return routes.flatMap((route) => {
-    const inputs = new Set<string>(routePolicies(route).flatMap(({ conditions }) => conditions.map(({ input }) => input)));
+    const inputs = new Set<string>(routePolicies(route).flatMap(policyInputs));
     if (inputs.has("answer:deCombinedMonthlyEur")) {
       inputs.add("answer:deContractNetEurMonthly");
       inputs.add("answer:deBlockedEurMonthly");
@@ -149,31 +212,35 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
   });
 }
 
-export function readProfile(form: HTMLFormElement, groups: readonly QuestionGroup[]): Profile {
-  // Form controls have IDs only, so a native submission sends no personal values.
+export function readProfile(draft: ProfileDraft, groups: readonly QuestionGroup[]): Profile {
   let age: number | undefined;
   let jobOffer: boolean | undefined;
   const answers: Record<string, string | number | boolean> = {};
   for (const { fields } of groups) {
-    for (const { input, id, question } of fields) {
-      const field = form.elements.namedItem(id);
-      if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement) || field.value === "") continue;
+    for (const { input, question } of fields) {
+      const value = draft[input];
+      if (!value) continue;
 
-      if (input === "age") age = Number(field.value);
-      else if (input === "jobOffer") jobOffer = field.value === "yes";
+      if (input === "age") age = Number(value);
+      else if (input === "jobOffer") jobOffer = value === "yes";
       else if (input.startsWith("answer:")) {
         answers[input.slice("answer:".length)] = question.type === "yes-no"
-          ? field.value === "yes"
-          : question.type === "number" ? Number(field.value) : field.value;
+          ? value === "yes"
+          : question.type === "number" ? Number(value) : value;
       }
     }
   }
 
-  const goal = form.elements.namedItem("profile-goal");
-  return { age, jobOffer, goal: goal instanceof HTMLSelectElement ? goal.value || undefined : undefined, answers };
+  return { age, jobOffer, goal: draft.goal || undefined, answers };
 }
 
-function QuestionControl({ id, question, language }: { id: string; question: Question; language: Language }) {
+function QuestionControl({ id, question, language, value, onChange }: {
+  id: string;
+  question: Question;
+  language: Language;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   const helpId = question.help ? `${id}-help` : undefined;
   const options = question.type === "choice" ? question.options : [
     { value: "yes", label: copy.yes }, { value: "no", label: copy.no },
@@ -184,9 +251,10 @@ function QuestionControl({ id, question, language }: { id: string; question: Que
       <label htmlFor={id}>{question.label[language]}</label>
       {question.type === "number" ? (
         <input id={id} type="number" min={question.min} max={question.max} step={question.step}
+          value={value} onChange={(event) => onChange(event.target.value)}
           inputMode={question.step === 1 ? "numeric" : "decimal"} aria-describedby={helpId} />
       ) : (
-        <select id={id} aria-describedby={helpId}>
+        <select id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId}>
           <option value="">{copy.unfinished[language]}</option>
           {options.map(({ value, label }) => <option key={value} value={value}>{label[language]}</option>)}
         </select>
@@ -196,7 +264,12 @@ function QuestionControl({ id, question, language }: { id: string; question: Que
   );
 }
 
-export function RuleQuestions({ groups, language }: { groups: readonly QuestionGroup[]; language: Language }) {
+export function RuleQuestions({ groups, language, draft, onChange }: {
+  groups: readonly QuestionGroup[];
+  language: Language;
+  draft: ProfileDraft;
+  onChange: (input: string, value: string) => void;
+}) {
   if (groups.length === 0) return null;
 
   const sections = Object.keys(sectionLabels) as Section[];
@@ -215,8 +288,9 @@ export function RuleQuestions({ groups, language }: { groups: readonly QuestionG
                 <div className="question-section" key={section}>
                   <p className="question-section-title">{sectionLabels[section][language]}</p>
                   <div className="question-grid">
-                    {fieldsInSection.map(({ id, question }) => (
-                      <QuestionControl id={id} question={question} language={language} key={id} />
+                    {fieldsInSection.map(({ id, input, question }) => (
+                      <QuestionControl id={id} question={question} language={language} key={id}
+                        value={draft[input] ?? ""} onChange={(value) => onChange(input, value)} />
                     ))}
                   </div>
                 </div>

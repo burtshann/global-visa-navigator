@@ -89,21 +89,59 @@ describe("policy publication", () => {
   });
 
   it("defaults to information-only without a production database", async () => {
-    const [visible] = await loadPublishedRoutes([route], { NODE_ENV: "production" });
+    const { availability, routes: [visible] } = await loadPublishedRoutes([route], { NODE_ENV: "production" });
+    expect(availability).toBe("available");
     expect(visible.policy).toBeUndefined();
     expect(visible.policies).toEqual([]);
+  });
+
+  it("does not enable a production policy through the Milestone 2 environment variables", async () => {
+    const legacy = {
+      NODE_ENV: "production", DATABASE_URL: "postgres://owner@127.0.0.1/policies", POLICY_SOURCE: "snapshot",
+    };
+    const { routes: [visible] } = await loadPublishedRoutes([route], legacy);
+    expect(visible.policy).toBeUndefined();
+    expect(visible.policies).toEqual([]);
+  });
+
+  it("only reads the approved view with the dedicated reader login", async () => {
+    const query = vi.spyOn(Pool.prototype, "query").mockImplementationOnce(() => Promise.resolve({ rows: [approvedRow(policy)] }));
+    try {
+      const { availability, routes: [visible] } = await loadPublishedRoutes([route], {
+        POLICY_DATABASE_URL: "postgres://reader@127.0.0.1/policies", NODE_ENV: "production",
+      });
+      expect(query).toHaveBeenCalledWith(expect.stringContaining("FROM public.gvn_approved_policy_snapshot"));
+      expect(availability).toBe("available");
+      expect(visible.policy).toBe(policy);
+    } finally {
+      query.mockRestore();
+    }
+  });
+
+  it("returns an available directory when the configured database has no approvals", async () => {
+    const query = vi.spyOn(Pool.prototype, "query").mockImplementationOnce(() => Promise.resolve({ rows: [] }));
+    try {
+      const { availability, routes: [visible] } = await loadPublishedRoutes([route], {
+        POLICY_DATABASE_URL: "postgres://reader@127.0.0.1/policies", NODE_ENV: "production",
+      });
+      expect(availability).toBe("available");
+      expect(visible.policy).toBeUndefined();
+      expect(visible.policies).toEqual([]);
+    } finally {
+      query.mockRestore();
+    }
   });
 
   it("withholds Git policies when the configured approval store is unavailable", async () => {
     const query = vi.spyOn(Pool.prototype, "query").mockRejectedValueOnce(new Error("fixture database details"));
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const [visible] = await loadPublishedRoutes([route], {
-        DATABASE_URL: "postgres://fixture.example.test/policies",
+      const { availability, routes: [visible] } = await loadPublishedRoutes([route], {
+        POLICY_DATABASE_URL: "postgres://reader@fixture.example.test/policies?sslmode=verify-full",
         NODE_ENV: "development",
-        POLICY_SOURCE: "snapshot",
       });
       expect(query).toHaveBeenCalledOnce();
+      expect(availability).toBe("unavailable");
       expect(visible.policy).toBeUndefined();
       expect(visible.policies).toEqual([]);
       expect(log).toHaveBeenCalledWith("Approved policy snapshots could not be loaded. Showing directory only.");
@@ -113,11 +151,26 @@ describe("policy publication", () => {
     }
   });
 
+  it("withholds policies without contacting a remote database configured without verified TLS", async () => {
+    const query = vi.spyOn(Pool.prototype, "query");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { availability, routes: [visible] } = await loadPublishedRoutes([route], {
+        POLICY_DATABASE_URL: "postgres://reader@fixture.example.test/policies?sslmode=require", NODE_ENV: "production",
+      });
+      expect(query).not.toHaveBeenCalled();
+      expect(availability).toBe("unavailable");
+      expect(visible.policy).toBeUndefined();
+    } finally {
+      query.mockRestore();
+      log.mockRestore();
+    }
+  });
+
   it.each([
     { NODE_ENV: "development" },
     { NODE_ENV: "test" },
-    { NODE_ENV: "production", POLICY_SOURCE: "snapshot" },
-  ])("allows local or explicit snapshot preview (%o)", async (env) => {
-    expect(await loadPublishedRoutes([route], env)).toEqual([route]);
+  ])("allows local development/test snapshots (%o)", async (env) => {
+    expect(await loadPublishedRoutes([route], env)).toEqual({ availability: "available", routes: [route] });
   });
 });

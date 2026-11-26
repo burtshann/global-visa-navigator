@@ -15,10 +15,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run start -- --hostname 127.0.0.1 --port 3100",
+    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
     env: {
-      DATABASE_URL: "",
-      POLICY_SOURCE: "snapshot",
+      POLICY_DATABASE_URL: "",
       NEXT_TELEMETRY_DISABLED: "1",
       NODE_OPTIONS: [process.env.NODE_OPTIONS, "--require=./e2e/server-clock.cjs"].filter(Boolean).join(" "),
     },

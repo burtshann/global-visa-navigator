@@ -28,13 +28,16 @@ describe("published visa catalog", () => {
     }));
     expect(current).toEqual([
       "uk-graduate", "de-opportunity-card-skilled-worker", "de-opportunity-card-points",
-      "uk-skilled-worker-initial", "sg-ep-stage-1-2025",
+      "uk-skilled-worker-initial", "sg-ep-stage-1-2025", "sg-ep-stage-1-renewal", "sg-ep-stage-2-compass",
     ]);
 
     const singapore = routes.find(({ id }) => id === "sg-employment-pass");
     for (const date of ["2026-12-31", "2027-01-01"]) {
       const usable = singapore?.policies?.filter((policy) => evaluatePolicy(policy, {}, date).coverageIssue === null);
-      expect(usable?.map(({ id }) => id)).toEqual([date === "2026-12-31" ? "sg-ep-stage-1-2025" : "sg-ep-stage-1-2027"]);
+      expect(usable?.map(({ id }) => id)).toEqual([
+        date === "2026-12-31" ? "sg-ep-stage-1-2025" : "sg-ep-stage-1-2027",
+        "sg-ep-stage-1-renewal", "sg-ep-stage-2-compass",
+      ]);
     }
 
     const directoryOnly = routes.find(({ id }) => id === "ca-express-entry");

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { evaluatePolicy, policyInputs, type Profile } from "../domain/policy";
 import { snapshotDigest } from "../server/policy-snapshots";
+import { prepareMatchingProfile } from "./matching-profile";
 import { sgEmploymentPassPolicies } from "./sg-employment-pass";
 
-const [current, future] = sgEmploymentPassPolicies;
+const [current, future, renewal] = sgEmploymentPassPolicies;
 const currentAsOf = "2026-12-31";
 const futureAsOf = "2027-01-01";
 const defaultAnswers: Profile["answers"] = {
@@ -107,5 +108,67 @@ describe("Singapore Employment Pass Stage 1 salary", () => {
     };
     expect(snapshotDigest(modifiedPolicy)).not.toBe(snapshotDigest(current));
     expect(evaluatePolicy({ ...current, expression: { ...table, categories: [] } }, profile(), currentAsOf).status).toBe("rules-not-covered");
+  });
+});
+
+describe("Singapore Employment Pass renewal salary", () => {
+  function evaluateRenewal(answers: Profile["answers"], asOf = "2027-07-01") {
+    return evaluatePolicy(renewal, prepareMatchingProfile(profile({
+      sgEpInitialApplication: false,
+      sgEpRenewalSameEmployerRole: true,
+      ...answers,
+    })), asOf);
+  }
+
+  it.each([
+    ["2026-01-01", 23, false, 5_600],
+    ["2027-12-31", 30, false, 7_223],
+    ["2028-01-01", 30, false, 7_750],
+    ["2027-12-31", 30, true, 7_982],
+    ["2028-01-01", 30, true, 8_541],
+    ["2028-02-29", 45, true, 12_700],
+  ])("uses the published table for expiry %s, age %d, financial sector %s", (expiry, age, financial, minimum) => {
+    const answers = { sgEpRenewalExpiryDate: expiry, sgEpAge: age, sgEpFinancialSector: financial };
+    expect(evaluateRenewal({ ...answers, sgEpFixedMonthlySalarySgd: minimum })).toMatchObject({
+      status: "conditions-met",
+      thresholds: [{ minimum, status: "pass" }],
+    });
+    expect(evaluateRenewal({ ...answers, sgEpFixedMonthlySalarySgd: minimum - 0.01 })).toMatchObject({
+      status: "conditions-not-met",
+      thresholds: [{ minimum, status: "fail" }],
+    });
+  });
+
+  it("keeps the same salary cutoff before and after the new-application switch", () => {
+    const answers = { sgEpRenewalExpiryDate: "2027-06-27" };
+    for (const asOf of ["2026-12-31", "2027-01-01"]) {
+      expect(evaluateRenewal(answers, asOf)).toMatchObject({
+        status: "conditions-met", thresholds: [{ minimum: 7_223 }],
+      });
+    }
+  });
+
+  it.each([undefined, "2028-02-30", "2028-2-01", 20280101])("leaves a missing or invalid expiry (%s) unresolved", (expiry) => {
+    expect(evaluateRenewal({ sgEpRenewalExpiryDate: expiry })).toMatchObject({
+      status: "profile-incomplete", thresholds: [],
+    });
+  });
+
+  it("does not apply the renewal schedule to first applications or earlier expiries", () => {
+    for (const answers of [{ sgEpInitialApplication: true }, { sgEpRenewalExpiryDate: "2025-12-31" }]) {
+      expect(evaluateRenewal(answers)).toMatchObject({ status: "conditions-not-applicable", thresholds: [] });
+    }
+  });
+
+  it("distinguishes missing employer answers from a confirmed employer or salary gap", () => {
+    const answers = { sgEpRenewalExpiryDate: "2027-12-31" };
+    for (const overrides of [
+      { sgEpRenewalSameEmployerRole: undefined },
+      { sgEpFinancialSector: undefined },
+      { sgEpFixedMonthlySalarySgd: 7_223.001 },
+    ]) {
+      expect(evaluateRenewal({ ...answers, ...overrides }).status).toBe("profile-incomplete");
+    }
+    expect(evaluateRenewal({ ...answers, sgEpRenewalSameEmployerRole: false }).status).toBe("conditions-not-met");
   });
 });

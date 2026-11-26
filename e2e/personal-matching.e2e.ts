@@ -296,7 +296,8 @@ test.describe("mobile viewport", () => {
     await answer("sgEpFixedMonthlySalarySgd").fill("7981.99");
     const results = await checkProfile(page);
     const employmentPass = results.locator('[data-route-id="sg-employment-pass"]');
-    await expect(employmentPass.getByText("More information needed", { exact: true })).toBeVisible();
+    const newApplication = employmentPass.locator('[data-policy-id="sg-ep-stage-1-2025"]');
+    await expect(newApplication.getByText("More information needed", { exact: true })).toBeVisible();
     await expect(employmentPass.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
 
     await answer("sgEpFinancialSector").selectOption("yes");
@@ -310,4 +311,47 @@ test.describe("mobile viewport", () => {
     await expect(employmentPass.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
     await expect(employmentPass.getByText(/Asia\/Singapore/)).toBeVisible();
   });
+});
+
+test("checks a Singapore renewal and unknown COMPASS points in both languages on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  const answer = (name: string) => page.locator(`#question-sg-employment-pass-${name}`);
+  await answer("sgEpInitialApplication").selectOption("no");
+  await expect(answer("sgEpSingaporeJobOffer")).toHaveCount(0);
+  await answer("sgEpRenewalExpiryDate").fill("2028-01-01");
+  await answer("sgEpRenewalSameEmployerRole").selectOption("yes");
+  await answer("sgEpAge").fill("30");
+  await answer("sgEpFinancialSector").selectOption("yes");
+  await answer("sgEpFixedMonthlySalarySgd").fill("8540.99");
+  await answer("sgEpCompassOverseasIct").selectOption("no");
+  await answer("sgEpCompassShortRole").selectOption("no");
+  await answer("sgEpCompassC1").selectOption("20");
+  await answer("sgEpCompassC2").selectOption("10");
+
+  const results = await checkProfile(page);
+  const pathway = results.locator('[data-route-id="sg-employment-pass"]');
+  const renewal = pathway.locator('[data-policy-id="sg-ep-stage-1-renewal"]');
+  const compass = pathway.locator('[data-policy-id="sg-ep-stage-2-compass"]');
+  await expect(renewal.getByText(/8,541/)).toBeVisible();
+  await expect(renewal.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(compass.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await answer("sgEpRenewalExpiryDate").fill("2027-12-31");
+  await answer("sgEpCompassC3").selectOption("10");
+  await answer("sgEpCompassC4").selectOption("0");
+  await answer("sgEpCompassC5").selectOption("0");
+  await answer("sgEpCompassC6").selectOption("0");
+  await checkProfile(page);
+  await expect(renewal.getByText(/7,982/)).toBeVisible();
+  await expect(compass.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(pathway.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "简体中文" }).click();
+  await expect(page.getByLabel("现有就业准证到期日")).toHaveValue("2027-12-31");
+  const chinesePathway = page.getByRole("region", { name: "你的路径核对结果" }).locator('[data-route-id="sg-employment-pass"]');
+  await expect(chinesePathway.getByRole("heading", { name: "COMPASS 积分或豁免核对" })).toBeVisible();
+  await expect(chinesePathway.getByText("完整资格仍待核实", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

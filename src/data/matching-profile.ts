@@ -1,4 +1,5 @@
-import type { Profile } from "../domain/policy";
+import { isDate, type Profile } from "../domain/policy";
+import { sgEpCompassCriteria } from "./sg-ep-compass";
 
 export const de2026MonthlyMeansEur = 1_091;
 
@@ -33,6 +34,16 @@ export function prepareMatchingProfile(profile: Profile): Profile {
     if (Number.isSafeInteger(knownTotal) && (blocked !== undefined || net >= de2026MonthlyMeansEur * 100)) {
       answers.deCombinedMonthlyEur = knownTotal / 100;
     }
+  }
+
+  const expiry = answers.sgEpRenewalExpiryDate;
+  answers.sgEpRenewalExpiryDate = typeof expiry === "string" && isDate(expiry)
+    ? Number(expiry.replaceAll("-", ""))
+    : undefined;
+  const fixedSalary = monthlyCents(answers.sgEpFixedMonthlySalarySgd);
+  answers.sgEpFixedMonthlySalarySgd = fixedSalary === undefined ? undefined : fixedSalary / 100;
+  for (const { id, awards } of sgEpCompassCriteria) {
+    if (!awards.some((award) => String(award) === answers[id])) answers[id] = undefined;
   }
 
   // A signed employment contract establishes that the applicant has employment

@@ -1,4 +1,5 @@
 import type { Route } from "../data/catalog";
+import { sgEpCompassCriteria } from "../data/sg-ep-compass";
 import { policyInputs, type Localized, type Profile } from "../domain/policy";
 import { copy, specificQuestions } from "./navigator-copy";
 import { routePolicies, type Language } from "./policy-result";
@@ -8,6 +9,8 @@ const sectionLabels = {
   education: { en: "Education and language", zh: "学历与语言" },
   experience: { en: "Experience and other points factors", zh: "职业经验及其他积分因素" },
   finance: { en: "Proof of funds", zh: "资金证明" },
+  singaporeSalary: { en: "Employment and salary", zh: "雇主与薪资" },
+  compass: { en: "COMPASS exemptions and points", zh: "COMPASS 豁免与积分" },
 } satisfies Record<string, Localized>;
 
 type Section = keyof typeof sectionLabels;
@@ -15,8 +18,10 @@ type Question = {
   label: Localized;
   section: Section;
   help?: Localized;
+  visibleFor?: { input: string; value: string };
 } & (
-  | { type: "yes-no" }
+  | { type: "yes-no"; yesLabel?: Localized; noLabel?: Localized }
+  | { type: "date" }
   | { type: "number"; min: number; max?: number; step?: number }
   | { type: "choice"; options: readonly { value: string; label: Localized }[] }
 );
@@ -79,12 +84,25 @@ const questions: Record<string, Question> = {
   },
   "answer:sgEpInitialApplication": {
     type: "yes-no", section: "application",
-    label: { en: "Are you checking a new Singapore Employment Pass application?", zh: "你正在核对新的新加坡 Employment Pass 申请吗？" },
-    help: { en: "Use this check for a new application. Renewal dates and requirements differ.", zh: "本次核对适用于新申请。续签的生效日期和要求有所不同。" },
+    label: { en: "Which Singapore Employment Pass application are you checking?", zh: "你正在核对哪一种新加坡就业准证申请？" },
+    yesLabel: { en: "New application", zh: "新申请" },
+    noLabel: { en: "Renewal of an existing pass", zh: "续签现有准证" },
   },
   "answer:sgEpSingaporeJobOffer": {
     type: "yes-no", section: "application",
     label: { en: "Do you have a job offer in Singapore?", zh: "你是否已获得在新加坡工作的录用邀请？" },
+    visibleFor: { input: "answer:sgEpInitialApplication", value: "yes" },
+  },
+  "answer:sgEpRenewalExpiryDate": {
+    type: "date", section: "application",
+    label: { en: "Expiry date on the current Employment Pass", zh: "现有就业准证到期日" },
+    help: { en: "Use the date on the current pass. The date you submit the renewal may be earlier.", zh: "请填写现有准证上的到期日。提交续签申请的日期可能更早。" },
+    visibleFor: { input: "answer:sgEpInitialApplication", value: "no" },
+  },
+  "answer:sgEpRenewalSameEmployerRole": {
+    type: "yes-no", section: "application",
+    label: { en: "Will you continue in a managerial, executive or specialised job with the same employer?", zh: "你是否会继续在同一雇主处从事管理、高管或专业岗位？" },
+    visibleFor: { input: "answer:sgEpInitialApplication", value: "no" },
   },
   "answer:sgEpAge": {
     type: "number", section: "application", min: 0, max: 120, step: 1,
@@ -92,15 +110,35 @@ const questions: Record<string, Question> = {
     help: { en: "Enter completed years. Check with MOM if your application date falls near your birthday.", zh: "填写实足年龄。如申请日接近生日，请向新加坡人力部确认。" },
   },
   "answer:sgEpFinancialSector": {
-    type: "yes-no", section: "finance",
+    type: "yes-no", section: "singaporeSalary",
     label: { en: "Is the employer classified by MOM as financial services?", zh: "雇主在人力部的行业分类是否属于金融服务业？" },
     help: { en: "Choose No only if the employer confirms another classification. Leave blank if it is unknown.", zh: "仅在雇主确认属于其他行业时选择「否」。分类未知时请留空。" },
   },
   "answer:sgEpFixedMonthlySalarySgd": {
-    type: "number", section: "finance", min: 0, step: 0.01,
-    label: { en: "Offered fixed monthly salary (SGD)", zh: "录用邀请中的固定月薪（新加坡元）" },
+    type: "number", section: "singaporeSalary", min: 0, step: 0.01,
+    label: { en: "Fixed monthly salary for this application (SGD)", zh: "本次申请的固定月薪（新加坡元）" },
     help: { en: "Enter the basic monthly salary plus fixed monthly allowances. Exclude variable bonuses, commission, overtime and benefits in kind.", zh: "填写基本月薪与每月固定津贴之和。浮动奖金、佣金、加班费及实物福利不计入。" },
   },
+  "answer:sgEpCompassOverseasIct": {
+    type: "yes-no", section: "compass",
+    label: { en: "Has the employer confirmed a qualifying overseas intra-corporate transfer?", zh: "雇主是否已确认此次申请符合海外公司内部调动资格？" },
+    help: { en: "Check the WTO GATS definition or the applicable Singapore trade agreement. Leave unconfirmed answers blank.", zh: "请核实是否符合 WTO《服务贸易总协定》或适用的新加坡贸易协定。未经核实请留空。" },
+  },
+  "answer:sgEpCompassShortRole": {
+    type: "yes-no", section: "compass",
+    label: { en: "Has the employer confirmed that the role lasts one month or less?", zh: "雇主是否已确认岗位期限为一个月或更短？" },
+    help: { en: "Choose No only if the employer confirms a longer role.", zh: "仅在雇主确认岗位期限超过一个月时选择「否」。" },
+  },
+  ...Object.fromEntries(sgEpCompassCriteria.map(({ id, label, awards }): [string, Question] => [
+    `answer:${id}`,
+    {
+      type: "choice", section: "compass", label,
+      options: awards.map((award) => ({
+        value: String(award),
+        label: { en: `${award} points`, zh: `${award} 分` },
+      })),
+    },
+  ])),
   "answer:outsideEuEfta": { type: "yes-no", section: "application", label: specificQuestions.outsideEuEfta },
   "answer:deRecognizedQualification": { type: "yes-no", section: "education", label: specificQuestions.deRecognizedQualification },
   "answer:deLivelihoodEvidence": { type: "yes-no", section: "finance", label: specificQuestions.deLivelihoodEvidence },
@@ -242,9 +280,10 @@ function QuestionControl({ id, question, language, value, onChange }: {
   onChange: (value: string) => void;
 }) {
   const helpId = question.help ? `${id}-help` : undefined;
-  const options = question.type === "choice" ? question.options : [
-    { value: "yes", label: copy.yes }, { value: "no", label: copy.no },
-  ];
+  const options = question.type === "choice" ? question.options : question.type === "yes-no" ? [
+    { value: "yes", label: question.yesLabel ?? copy.yes },
+    { value: "no", label: question.noLabel ?? copy.no },
+  ] : [];
 
   return (
     <div className="field">
@@ -253,6 +292,8 @@ function QuestionControl({ id, question, language, value, onChange }: {
         <input id={id} type="number" min={question.min} max={question.max} step={question.step}
           value={value} onChange={(event) => onChange(event.target.value)}
           inputMode={question.step === 1 ? "numeric" : "decimal"} aria-describedby={helpId} />
+      ) : question.type === "date" ? (
+        <input id={id} type="date" value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId} />
       ) : (
         <select id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId}>
           <option value="">{copy.unfinished[language]}</option>
@@ -282,11 +323,20 @@ export function RuleQuestions({ groups, language, draft, onChange }: {
           <fieldset key={route.id}>
             <legend>{route.name[language]}</legend>
             {sections.map((section) => {
-              const fieldsInSection = fields.filter(({ question }) => question.section === section);
+              const fieldsInSection = fields.filter(({ question }) =>
+                question.section === section && (!question.visibleFor || draft[question.visibleFor.input] === question.visibleFor.value),
+              );
               if (fieldsInSection.length === 0) return null;
               return (
                 <div className="question-section" key={section}>
                   <p className="question-section-title">{sectionLabels[section][language]}</p>
+                  {section === "compass" && (
+                    <p className="field-help">
+                      {language === "en"
+                        ? "For C1–C6, use the employer’s confirmed points for this application from MOM’s Self-Assessment Tool. Leave an unknown score blank and select zero only when confirmed."
+                        : "C1 至 C6 请按雇主通过新加坡人力部自评工具为本次申请核实的积分填写。未知请留空，只有确认不得分时才选择 0 分。"}
+                    </p>
+                  )}
                   <div className="question-grid">
                     {fieldsInSection.map(({ id, input, question }) => (
                       <QuestionControl id={id} question={question} language={language} key={id}

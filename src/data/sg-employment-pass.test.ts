@@ -112,16 +112,16 @@ describe("Singapore Employment Pass Stage 1 salary", () => {
 });
 
 describe("Singapore Employment Pass renewal salary", () => {
-  function evaluateRenewal(answers: Profile["answers"], asOf = "2027-07-01") {
+  function evaluateRenewal(answers: Profile["answers"], asOf = "2027-12-01") {
     return evaluatePolicy(renewal, prepareMatchingProfile(profile({
       sgEpInitialApplication: false,
       sgEpRenewalSameEmployerRole: true,
       ...answers,
-    })), asOf);
+    }), asOf), asOf);
   }
 
   it.each([
-    ["2026-01-01", 23, false, 5_600],
+    ["2027-12-15", 23, false, 5_600],
     ["2027-12-31", 30, false, 7_223],
     ["2028-01-01", 30, false, 7_750],
     ["2027-12-31", 30, true, 7_982],
@@ -154,10 +154,26 @@ describe("Singapore Employment Pass renewal salary", () => {
     });
   });
 
-  it("does not apply the renewal schedule to first applications or earlier expiries", () => {
-    for (const answers of [{ sgEpInitialApplication: true }, { sgEpRenewalExpiryDate: "2025-12-31" }]) {
-      expect(evaluateRenewal(answers)).toMatchObject({ status: "conditions-not-applicable", thresholds: [] });
-    }
+  it("does not apply the renewal schedule to first applications", () => {
+    expect(evaluateRenewal({ sgEpInitialApplication: true })).toMatchObject({
+      status: "conditions-not-applicable", thresholds: [],
+    });
+  });
+
+  it.each(["2025-12-31", "2026-10-01", "2026-11-27"])("rejects renewals where the pass expiry %s is today or in the past", (expiry) => {
+    const result = evaluateRenewal({ sgEpRenewalExpiryDate: expiry, sgEpFixedMonthlySalarySgd: 22_500 }, "2026-11-27");
+    expect(result).toMatchObject({ status: "conditions-not-met", thresholds: [] });
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "sg-ep-renewal-before-deadline" }), status: "fail",
+    }));
+  });
+
+  it.each([
+    ["2026-11-28", "conditions-met"],
+    ["2027-05-26", "conditions-met"],
+    ["2027-05-27", "conditions-not-met"],
+  ])("uses the 180-day filing window for a pass expiring on %s", (expiry, status) => {
+    expect(evaluateRenewal({ sgEpRenewalExpiryDate: expiry }, "2026-11-27").status).toBe(status);
   });
 
   it("distinguishes missing employer answers from a confirmed employer or salary gap", () => {

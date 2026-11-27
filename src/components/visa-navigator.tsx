@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Route } from "../data/catalog";
 import { categoryLabels, countries, type Category, type Country } from "../data/destinations";
-import { evaluatePathway, type Evaluation, type Policy, type Profile } from "../domain/policy";
+import { evaluatePathway, type Evaluation, type Localized, type Policy, type Profile } from "../domain/policy";
 import { prepareMatchingProfile } from "../data/matching-profile";
 import type { Assessment } from "../server/assessment";
 import { copy } from "./navigator-copy";
 import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
-import { getRuleQuestionGroups, readProfile, RuleQuestions, type ProfileDraft } from "./profile-questions";
+import {
+  clearCompassEvidence, getRuleQuestionGroups, isCompassApplicationInput,
+  readProfile, RuleQuestions, type ProfileDraft,
+} from "./profile-questions";
 
 type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
@@ -23,22 +26,59 @@ const priority: Record<Evaluation["status"], number> = {
 const categories = Object.entries(categoryLabels) as [Category, { en: string; zh: string }][];
 const countriesById = new Map<string, Country>(countries.map((country) => [country.id, country]));
 
-function routePriority(policies: readonly CheckedPolicy[]) {
-  return Math.min(...policies.map(({ outcome }) => priority[outcome.status]));
+type MatchCheck = CheckedPolicy | { id: string; name: Localized };
+type RouteMatch = {
+  checks: readonly MatchCheck[];
+  relevance: CheckedPolicy["relevance"];
+  rank: number;
+};
+
+function matchRoute(route: Route, profile: Profile, date: string): RouteMatch | undefined {
+  const policies = routePolicies(route)
+    .map((policy) => ({ policy, ...evaluatePathway(policy, profile, date, [route.category]) }))
+    .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions");
+  if (policies.length === 0) return undefined;
+
+  const relevance = policies[0].relevance;
+  const byPriority = (first: CheckedPolicy, second: CheckedPolicy) =>
+    priority[first.outcome.status] - priority[second.outcome.status];
+
+  if (!route.requiredPolicyGroups) {
+    const checks = policies.sort(byPriority);
+    return { checks, relevance, rank: priority[checks[0].outcome.status] };
+  }
+
+  const checks: MatchCheck[] = [];
+  let rank = priority["conditions-met"];
+  for (const { id, name, policyIds } of route.requiredPolicyGroups) {
+    const published = policies.filter(({ policy }) => policyIds.includes(policy.id));
+    const applicable = published.filter(({ outcome }) => outcome.status !== "conditions-not-applicable").sort(byPriority);
+    const best = applicable[0];
+    // Alternatives can satisfy one stage. The least satisfied required stage determines the pathway's rank.
+    rank = Math.max(rank, best ? priority[best.outcome.status] : priority["profile-incomplete"]);
+    if (best) checks.push(...applicable);
+    else if (policyIds.length === 1 && published.length > 0) checks.push(...published);
+    else checks.push({ id, name });
+  }
+  return { checks, relevance, rank };
+}
+
+function compassVersion(assessment: Assessment) {
+  return assessment.policies["sg-employment-pass"]?.policies?.find(({ id }) => id === "sg-ep-stage-2-compass")?.version;
 }
 
 function assessmentRoutes(directory: readonly Route[], assessment: Assessment) {
   return directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
 }
 
-function MatchCard({ route, policies, language, localDate }: {
+function MatchCard({ route, match, language, localDate }: {
   route: Route;
-  policies: readonly CheckedPolicy[];
+  match: RouteMatch;
   language: Language;
   localDate?: string;
 }) {
   const country = countriesById.get(route.countryId);
-  const relevance = policies[0]?.relevance;
+  const { relevance, checks } = match;
   const t = (key: keyof typeof copy) => copy[key][language];
 
   return (
@@ -53,14 +93,26 @@ function MatchCard({ route, policies, language, localDate }: {
         </div>
         <div><dt>{t("fullEligibility")}</dt><dd>{t("fullEligibilityUnverified")}</dd></div>
       </dl>
-      {policies.map(({ policy, outcome }) => (
-        <div className="match-mechanism" key={policy.id} data-policy-id={policy.id}>
-          {policy.name && <h4>{policy.name[language]}</h4>}
-          <p className="match-outcome"><strong>{t("checkedOutcome")}</strong> <PolicyStatus language={language} evaluation={outcome} /></p>
-          {(policy.scope ?? route.scope) && <p className="route-scope"><strong>{t("scope")}</strong> {(policy.scope ?? route.scope)?.[language]}</p>}
-          <PolicyDetails language={language} policy={policy} evaluation={outcome} />
-        </div>
-      ))}
+      {route.requiredPolicyGroups && <p className="route-scope">{t("requiredStages")}</p>}
+      {checks.map((check) => {
+        if (!("policy" in check)) {
+          return (
+            <div className="match-mechanism" key={check.id} data-stage-id={check.id}>
+              <h4>{check.name[language]}</h4>
+              <p>{t("stageUnavailable")}</p>
+            </div>
+          );
+        }
+        const { policy, outcome } = check;
+        return (
+          <div className="match-mechanism" key={policy.id} data-policy-id={policy.id}>
+            {policy.name && <h4>{policy.name[language]}</h4>}
+            <p className="match-outcome"><strong>{t("checkedOutcome")}</strong> <PolicyStatus language={language} evaluation={outcome} /></p>
+            {(policy.scope ?? route.scope) && <p className="route-scope"><strong>{t("scope")}</strong> {(policy.scope ?? route.scope)?.[language]}</p>}
+            <PolicyDetails language={language} policy={policy} evaluation={outcome} />
+          </div>
+        );
+      })}
       <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
     </li>
   );
@@ -84,19 +136,17 @@ export function VisaNavigator({ directory, initialAssessment }: {
 
   const resultsTitle = useRef<HTMLHeadingElement>(null);
   const assessmentRequest = useRef<AbortController | null>(null);
+  const lastCompassVersion = useRef(compassVersion(initialAssessment));
   const { asOf, localDates } = assessment;
   const lastAvailableRoutes = assessmentRoutes(directory, assessment);
   const routes = assessment.availability === "unavailable" ? directory : lastAvailableRoutes;
   const routesById = new Map(routes.map((route) => [route.id, route]));
   const questions = getRuleQuestionGroups(lastAvailableRoutes);
   const matchedRoutes = checkedProfile && assessment.availability === "available" ? routes.flatMap((route) => {
-    const policies = routePolicies(route)
-      .map((policy) => ({ policy, ...evaluatePathway(policy, checkedProfile, localDates[route.id] ?? asOf, [route.category]) }))
-      .filter(({ relevance, coverage }) => relevance !== "different-goal" && coverage === "checked-conditions")
-      .sort((first, second) => priority[first.outcome.status] - priority[second.outcome.status]);
-    return policies.length > 0 ? [{ route, policies }] : [];
-  }).sort((first, second) => routePriority(first.policies) - routePriority(second.policies)) : [];
-  const matchesById = new Map(matchedRoutes.map(({ route, policies }) => [route.id, policies]));
+    const match = matchRoute(route, checkedProfile, localDates[route.id] ?? asOf);
+    return match ? [{ route, match }] : [];
+  }).sort((first, second) => first.match.rank - second.match.rank) : [];
+  const matchesById = new Map(matchedRoutes.map(({ route, match }) => [route.id, match]));
   const visibleRoutes = routes.filter((route) =>
     (countryFilter === "all" || route.countryId === countryFilter) &&
     (categoryFilter === "all" || route.category === categoryFilter),
@@ -116,7 +166,16 @@ export function VisaNavigator({ directory, initialAssessment }: {
   }
 
   function updateDraft(input: string, value: string) {
-    setDraft((previous) => ({ ...previous, [input]: value }));
+    const affectsCompass = isCompassApplicationInput(input);
+    if (assessmentRequest.current || affectsCompass) {
+      assessmentRequest.current?.abort();
+      setFormMessage(null);
+    }
+    if (affectsCompass) setCheckedProfile(null);
+    setDraft((previous) => {
+      const next = { ...previous, [input]: value };
+      return affectsCompass && value !== (previous[input] ?? "") ? clearCompassEvidence(next) : next;
+    });
   }
 
   async function checkProfile(event: FormEvent<HTMLFormElement>) {
@@ -133,8 +192,16 @@ export function VisaNavigator({ directory, initialAssessment }: {
       if (request.signal.aborted) return;
       if (current.availability !== "available") throw new Error("Policy refresh failed.");
       const currentQuestions = getRuleQuestionGroups(assessmentRoutes(directory, current));
+      const singaporeDate = current.localDates["sg-employment-pass"];
+      const assessmentDayChanged = singaporeDate !== localDates["sg-employment-pass"];
+      const currentCompassVersion = compassVersion(current);
+      const compassVersionChanged = currentCompassVersion !== undefined && lastCompassVersion.current !== undefined
+        && currentCompassVersion !== lastCompassVersion.current;
+      if (currentCompassVersion !== undefined) lastCompassVersion.current = currentCompassVersion;
+      const currentDraft = assessmentDayChanged || compassVersionChanged ? clearCompassEvidence(draft) : draft;
       setAssessment(current);
-      setCheckedProfile(prepareMatchingProfile(readProfile(draft, currentQuestions)));
+      setDraft(currentDraft);
+      setCheckedProfile(prepareMatchingProfile(readProfile(currentDraft, currentQuestions), singaporeDate));
       setFormMessage("checked");
     } catch {
       if (!request.signal.aborted) {
@@ -275,8 +342,8 @@ export function VisaNavigator({ directory, initialAssessment }: {
                 </div>
               ) : (
                 <ul className="route-grid">
-                  {matchedRoutes.map(({ route, policies }) => (
-                    <MatchCard key={route.id} route={route} policies={policies} language={language} localDate={localDates[route.id]} />
+                  {matchedRoutes.map(({ route, match }) => (
+                    <MatchCard key={route.id} route={route} match={match} language={language} localDate={localDates[route.id]} />
                   ))}
                 </ul>
               )}
@@ -329,23 +396,29 @@ export function VisaNavigator({ directory, initialAssessment }: {
                 {comparison.map((id) => {
                   const route = routesById.get(id);
                   if (!route) return null;
-                  const checkedPolicies = matchesById.get(id);
+                  const checkedMatch = matchesById.get(id);
                   return (
                     <li key={id} className="comparison-card">
                       <div className="route-context">
                         {countriesById.get(route.countryId)?.name[language]} <span aria-hidden="true">·</span> {categoryLabels[route.category][language]}
                       </div>
                       <h4>{route.name[language]}</h4>
-                      {checkedPolicies ? (
+                      {checkedMatch ? (
                         <>
                           <p>{t("fullEligibilityUnverified")}</p>
+                          {route.requiredPolicyGroups && <p>{t("requiredStages")}</p>}
                           <ul className="compared-checks">
-                            {checkedPolicies.map(({ policy, outcome }) => (
-                              <li key={policy.id}>
-                                {policy.name?.[language] ?? t("checkedOutcome")}{" "}
-                                <PolicyStatus evaluation={outcome} language={language} />
-                              </li>
-                            ))}
+                            {checkedMatch.checks.map((check) => {
+                              if (!("policy" in check)) {
+                                return <li key={check.id}>{check.name[language]} · {t("stageUnavailable")}</li>;
+                              }
+                              return (
+                                <li key={check.policy.id}>
+                                  {check.policy.name?.[language] ?? t("checkedOutcome")}{" "}
+                                  <PolicyStatus evaluation={check.outcome} language={language} />
+                                </li>
+                              );
+                            })}
                           </ul>
                         </>
                       ) : <PolicyStatus hasPolicy={routePolicies(route).length > 0} language={language} />}

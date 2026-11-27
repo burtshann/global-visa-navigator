@@ -1,5 +1,6 @@
 import type { Condition, Policy, RuleExpression, RuleSource } from "@/domain/policy";
 import { sgEpCompassPolicy } from "./sg-ep-compass";
+import { renewalDeadline, renewalWindowOpened, sgEpRenewalUrl } from "./sg-ep-renewal-window";
 
 const momEligibility = "https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility";
 const momKeyFacts = "https://www.mom.gov.sg/passes-and-permits/employment-pass/key-facts";
@@ -138,7 +139,6 @@ function salaryPolicy(schedule: SalarySchedule): Policy {
   };
 }
 
-const renewalPage = "https://www.mom.gov.sg/passes-and-permits/employment-pass/renew-a-pass";
 const renewalSources: readonly [RuleSource, RuleSource] = [
   {
     url: momEligibility,
@@ -179,7 +179,7 @@ const renewalSources: readonly [RuleSource, RuleSource] = [
 ];
 
 const renewalScopeSource: RuleSource = {
-  url: renewalPage,
+  url: sgEpRenewalUrl,
   applicableWhen: { en: "Renewals of an existing Employment Pass.", zh: "适用于现有就业准证的续签。" },
   evidence: {
     en: "An EP renewal requires the candidate to keep working for the same employer in a managerial, executive or specialised job. Ordinary EP renewals may be filed up to six months before expiry.",
@@ -191,15 +191,6 @@ const renewalScopeSource: RuleSource = {
 };
 
 const renewalDateConditions: readonly Condition[] = [
-  {
-    id: "sg-ep-renewal-covered-expiry",
-    input: "answer:sgEpRenewalExpiryDate",
-    operator: "gte",
-    expected: 20260101,
-    label: { en: "The current pass expires on or after 1 January 2026", zh: "现有准证到期日为 2026 年 1 月 1 日或以后" },
-    nextStep: { en: "Enter the expiry date shown on the current pass. Check earlier expiry dates directly with MOM.", zh: "填写现有准证上显示的到期日。若早于该日期，请向新加坡人力部核实。" },
-    source: renewalSources[0],
-  },
   {
     id: "sg-ep-renewal-before-2028",
     input: "answer:sgEpRenewalExpiryDate",
@@ -222,12 +213,12 @@ const renewalDateConditions: readonly Condition[] = [
 
 const renewalPolicy: Policy = {
   id: "sg-ep-stage-1-renewal",
-  version: "2026-11-26.1",
+  version: "2026-11-26.2",
   stage: "application",
   name: { en: "Employment Pass renewal salary check", zh: "就业准证续签薪资核对" },
   scope: {
-    en: "Checks ordinary renewals for the same employer and selects the Stage 1 salary table using the current pass expiry date. The employer still needs to confirm when to file, any special provisions and other renewal requirements.",
-    zh: "核对同一雇主的普通续签，并按照现有准证到期日选用第一阶段薪资表。递交时限、特殊安排和其他续签要求仍需雇主确认。",
+    en: "Checks the ordinary renewal window using today’s Singapore date and the Stage 1 salary using the current pass expiry date. The employer still needs to confirm special provisions, including the EP (Sponsorship) window, and other requirements.",
+    zh: "按新加坡当地核对日判断普通续签窗口，并按现有准证到期日选用第一阶段薪资表。担保类准证的递交窗口等特殊安排及其他续签要求仍需雇主核实。",
   },
   conditions: [
     {
@@ -248,28 +239,44 @@ const renewalPolicy: Policy = {
       nextStep: { en: "Check the employer and role with MOM. For a change of employer, ask about a new pass application.", zh: "请向新加坡人力部核实雇主和岗位。更换雇主时，请核实新申请要求。" },
       source: renewalScopeSource,
     },
+    renewalDeadline,
+    renewalWindowOpened,
     ...renewalDateConditions,
   ],
   expression: {
     kind: "when",
-    test: {
-      kind: "all",
-      children: [
-        { kind: "condition", conditionId: "sg-ep-is-renewal" },
-        { kind: "condition", conditionId: "sg-ep-renewal-covered-expiry" },
-      ],
-    },
+    test: { kind: "condition", conditionId: "sg-ep-is-renewal" },
     requirement: {
       kind: "all",
       children: [
-        { kind: "condition", conditionId: "sg-ep-renewal-same-employer" },
+        { kind: "condition", conditionId: renewalDeadline.id },
         {
-          kind: "any",
-          children: ["sg-ep-renewal-before-2028", "sg-ep-renewal-from-2028"].map((conditionId, index) => ({
-            kind: "when",
-            test: { kind: "condition", conditionId },
-            requirement: salaryTable(schedules[index], renewalSources[index]),
-          })),
+          kind: "when",
+          test: { kind: "condition", conditionId: renewalDeadline.id },
+          requirement: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: renewalWindowOpened.id },
+              {
+                kind: "when",
+                test: { kind: "condition", conditionId: renewalWindowOpened.id },
+                requirement: {
+                  kind: "all",
+                  children: [
+                    { kind: "condition", conditionId: "sg-ep-renewal-same-employer" },
+                    {
+                      kind: "any",
+                      children: renewalDateConditions.map(({ id }, index) => ({
+                        kind: "when",
+                        test: { kind: "condition", conditionId: id },
+                        requirement: salaryTable(schedules[index], renewalSources[index]),
+                      })),
+                    },
+                  ],
+                },
+              },
+            ],
+          },
         },
       ],
     },

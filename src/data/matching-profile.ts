@@ -15,7 +15,7 @@ function wholeYears(value: unknown, maximum: number): number | undefined {
     : undefined;
 }
 
-export function prepareMatchingProfile(profile: Profile): Profile {
+export function prepareMatchingProfile(profile: Profile, singaporeDate?: string): Profile {
   const answers = { ...profile.answers };
   const lastFive = wholeYears(answers.deRelevantYearsLast5, 5);
   const lastSeven = wholeYears(answers.deRelevantYearsLast7, 7);
@@ -36,9 +36,12 @@ export function prepareMatchingProfile(profile: Profile): Profile {
     }
   }
 
-  const expiry = answers.sgEpRenewalExpiryDate;
-  answers.sgEpRenewalExpiryDate = typeof expiry === "string" && isDate(expiry)
-    ? Number(expiry.replaceAll("-", ""))
+  const expiryInput = answers.sgEpRenewalExpiryDate;
+  const expiry = typeof expiryInput === "string" && isDate(expiryInput) ? expiryInput : undefined;
+  answers.sgEpRenewalExpiryDate = expiry ? Number(expiry.replaceAll("-", "")) : undefined;
+  // UTC midnights are used only to subtract two calendar dates already in Singapore time.
+  answers.sgEpDaysUntilExpiry = expiry && isDate(singaporeDate)
+    ? (Date.parse(`${expiry}T00:00:00Z`) - Date.parse(`${singaporeDate}T00:00:00Z`)) / 86_400_000
     : undefined;
   const fixedSalary = monthlyCents(answers.sgEpFixedMonthlySalarySgd);
   answers.sgEpFixedMonthlySalarySgd = fixedSalary === undefined ? undefined : fixedSalary / 100;

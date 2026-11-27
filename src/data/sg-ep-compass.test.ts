@@ -18,7 +18,7 @@ const zeroPoints: Profile["answers"] = {
 function evaluate(answers: Profile["answers"]) {
   return evaluatePolicy(sgEpCompassPolicy, prepareMatchingProfile({
     answers: { ...noExemption, ...answers },
-  }), asOf);
+  }, asOf), asOf);
 }
 
 describe("Employment Pass COMPASS", () => {
@@ -69,12 +69,26 @@ describe("Employment Pass COMPASS", () => {
     expect(evaluate({ ...zeroPoints, sgEpFixedMonthlySalarySgd: undefined }).status).toBe("profile-incomplete");
   });
 
-  it("applies the renewal expiry cutoff and waits for an unspecified application type or expiry", () => {
+  it.each(["2024-09-01", "2026-11-25", asOf, "2027-11-26"])("does not score a renewal outside its current filing window (%s)", (expiry) => {
+    expect(evaluate({
+      ...zeroPoints, sgEpCompassShortRole: true, sgEpInitialApplication: false, sgEpRenewalExpiryDate: expiry,
+    })).toMatchObject({ status: "conditions-not-applicable", scores: [] });
+  });
+
+  it("checks a renewal in its filing window and leaves an unknown type or expiry unresolved", () => {
     const answers = { ...zeroPoints, sgEpCompassShortRole: true };
-    expect(evaluate({ ...answers, sgEpInitialApplication: false, sgEpRenewalExpiryDate: "2024-08-31" }).status).toBe("conditions-not-applicable");
-    expect(evaluate({ ...answers, sgEpInitialApplication: false, sgEpRenewalExpiryDate: "2024-09-01" }).status).toBe("conditions-met");
+    expect(evaluate({ ...answers, sgEpInitialApplication: false, sgEpRenewalExpiryDate: "2026-11-27" }).status).toBe("conditions-met");
     expect(evaluate({ ...answers, sgEpInitialApplication: false }).status).toBe("profile-incomplete");
     expect(evaluate({ ...answers, sgEpInitialApplication: undefined }).status).toBe("profile-incomplete");
+  });
+
+  it("records separate MOM dates for new applications and existing passes", () => {
+    const sourceFor = (id: string) => sgEpCompassPolicy.conditions.find((condition) => condition.id === id)?.source;
+    expect(sourceFor("sg-ep-compass-new")?.effectiveFrom).toBe("2023-09-01");
+    expect(sourceFor("sg-ep-compass-renewal")).toMatchObject({
+      effectiveFrom: "2024-09-01",
+      effectiveDateNote: { en: "Passes expiring from 1 September 2024" },
+    });
   });
 
   it("can establish the 40-point minimum independently of an unknown bonus and full eligibility", () => {

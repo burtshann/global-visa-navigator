@@ -228,6 +228,33 @@ type Field = { input: string; id: string; question: Question };
 type QuestionGroup = { route: Route; fields: Field[] };
 export type ProfileDraft = Readonly<Partial<Record<string, string>>>;
 
+const compassEvidenceInputs = [
+  "answer:sgEpCompassOverseasIct",
+  "answer:sgEpCompassShortRole",
+  ...sgEpCompassCriteria.map(({ id }) => `answer:${id}`),
+];
+const compassApplicationInputs = [
+  "answer:sgEpInitialApplication",
+  "answer:sgEpSingaporeJobOffer",
+  "answer:sgEpAge",
+  "answer:sgEpFinancialSector",
+  "answer:sgEpFixedMonthlySalarySgd",
+  "answer:sgEpRenewalExpiryDate",
+  "answer:sgEpRenewalSameEmployerRole",
+];
+
+export function isCompassApplicationInput(input: string) {
+  return compassApplicationInputs.includes(input);
+}
+
+export function clearCompassEvidence(draft: ProfileDraft): ProfileDraft {
+  if (!compassEvidenceInputs.some((input) => draft[input])) return draft;
+
+  const updated = { ...draft };
+  for (const input of compassEvidenceInputs) delete updated[input];
+  return updated;
+}
+
 const orderedInputs = Object.keys(questions);
 
 export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[] {
@@ -238,6 +265,7 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
       inputs.add("answer:deContractNetEurMonthly");
       inputs.add("answer:deBlockedEurMonthly");
     }
+    if (inputs.has("answer:sgEpDaysUntilExpiry")) inputs.add("answer:sgEpRenewalExpiryDate");
     const fields = orderedInputs.flatMap((input) => {
       if (!inputs.has(input) || seen.has(input)) return [];
       seen.add(input);
@@ -333,8 +361,8 @@ export function RuleQuestions({ groups, language, draft, onChange }: {
                   {section === "compass" && (
                     <p className="field-help">
                       {language === "en"
-                        ? "For C1–C6, use the employer’s confirmed points for this application from MOM’s Self-Assessment Tool. Leave an unknown score blank and select zero only when confirmed."
-                        : "C1 至 C6 请按雇主通过新加坡人力部自评工具为本次申请核实的积分填写。未知请留空，只有确认不得分时才选择 0 分。"}
+                        ? "Use the employer’s confirmed C1–C6 points from MOM’s Self-Assessment Tool. Leave unknown scores blank. Reconfirm points and employer exemptions after a change to application details, assessment date or policy version. If the employer or role changes, clear your answers and enter the new evidence."
+                        : "请填写雇主通过新加坡人力部自评工具核实的 C1 至 C6 积分。未知请留空。申请信息、核对日期或规则版本变更后，请重新确认积分及雇主豁免。更换雇主或岗位时，请清除答案并填入新证据。"}
                     </p>
                   )}
                   <div className="question-grid">

@@ -1,9 +1,10 @@
 import type { Condition, Localized, Policy, RuleExpression, RuleSource, ScoreCategory } from "../domain/policy";
+import { renewalDeadline, renewalWindowOpened, sgEpRenewalUrl } from "./sg-ep-renewal-window";
 
 const momEligibility = "https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility";
-const renewalPage = "https://www.mom.gov.sg/passes-and-permits/employment-pass/renew-a-pass";
+const compassAnnouncement = "https://www.mom.gov.sg/newsroom/press-releases/2023/0329-details-on-compass-bonus-criteria";
 const sat = "MOM’s Self-Assessment Tool (SAT)";
-const verifiedAt = "2026-11-26T18:04:30Z";
+const verifiedAt = "2026-11-26T23:59:05Z";
 
 type Criterion = {
   id: string;
@@ -71,7 +72,11 @@ export const sgEpCompassCriteria: readonly Criterion[] = [
 
 const source: RuleSource = {
   url: momEligibility,
-  effectiveDateUrl: renewalPage,
+  effectiveDateUrl: compassAnnouncement,
+  effectiveDateNote: {
+    en: "New applications from 1 September 2023. Renewals for passes expiring from 1 September 2024.",
+    zh: "新申请自 2023 年 9 月 1 日适用。续签自现有准证于 2024 年 9 月 1 日起到期时适用。",
+  },
   applicableWhen: {
     en: "COMPASS Stage 2 for new Employment Pass applications and renewals subject to COMPASS. Renewal coverage here begins with passes expiring on 1 September 2024.",
     zh: "适用于须接受 COMPASS 核对的就业准证新申请及续签。续签自准证在 2024 年 9 月 1 日到期时起纳入。",
@@ -80,7 +85,7 @@ const source: RuleSource = {
     en: "MOM requires at least 40 points from C1 to C6 unless an exemption applies. The Stage 1 qualifying salary is evaluated separately.",
     zh: "除适用豁免外，人力部要求 C1 至 C6 合计至少 40 分。第一阶段的最低薪资另行核对。",
   },
-  effectiveFrom: "2024-09-01",
+  effectiveFrom: "2023-09-01",
   lastVerifiedAt: verifiedAt,
   reviewStatus: "verified",
 };
@@ -93,7 +98,11 @@ const compassScope: readonly Condition[] = [
     expected: true,
     label: { en: "This is a new Employment Pass application", zh: "这是就业准证新申请" },
     nextStep: { en: "Choose the application type.", zh: "请选择申请类型。" },
-    source,
+    source: {
+      ...source,
+      effectiveDateNote: undefined,
+      applicableWhen: { en: "New Employment Pass applications.", zh: "适用于就业准证新申请。" },
+    },
   },
   {
     id: "sg-ep-compass-renewal",
@@ -102,22 +111,12 @@ const compassScope: readonly Condition[] = [
     expected: false,
     label: { en: "This is a renewal of an existing Employment Pass", zh: "正在续签现有就业准证" },
     nextStep: { en: "Choose the application type.", zh: "请选择申请类型。" },
-    source,
-  },
-  {
-    id: "sg-ep-compass-renewal-expiry",
-    input: "answer:sgEpRenewalExpiryDate",
-    operator: "gte",
-    expected: 20240901,
-    label: { en: "The current pass expires on or after 1 September 2024", zh: "现有准证到期日为 2024 年 9 月 1 日或以后" },
-    nextStep: { en: "Enter the expiry date shown on the current pass.", zh: "填写现有准证上显示的到期日。" },
     source: {
       ...source,
-      url: renewalPage,
-      evidence: {
-        en: "MOM applies COMPASS to renewals of passes expiring from 1 September 2024.",
-        zh: "新加坡人力部规定，现有准证在 2024 年 9 月 1 日或以后到期的续签适用 COMPASS。",
-      },
+      url: sgEpRenewalUrl,
+      effectiveDateNote: { en: "Passes expiring from 1 September 2024", zh: "2024 年 9 月 1 日起到期的准证" },
+      applicableWhen: { en: "Renewals of existing Employment Passes.", zh: "适用于现有就业准证续签。" },
+      effectiveFrom: "2024-09-01",
     },
   },
 ];
@@ -148,7 +147,6 @@ export const sgEpCompassExemptions: readonly Condition[] = [
     source: {
       ...source,
       url: "https://www.mom.gov.sg/faq/fair-consideration-framework/can-a-job-be-exempted-from-the-advertising-requirement-if-it-will-be-filled-by-an-intra-corporate-transferee-ict",
-      effectiveDateUrl: momEligibility,
       evidence: {
         en: "MOM's COMPASS exemption directs employers to its ICT definition under WTO GATS or an applicable FTA. A transfer within a company by itself does not establish the treaty basis.",
         zh: "COMPASS 豁免须符合人力部依据 WTO《服务贸易总协定》或适用贸易协定规定的海外公司内部调动定义。仅属于同一公司内部调任不足以证明符合协定。",
@@ -194,14 +192,14 @@ const condition = (conditionId: string): RuleExpression => ({ kind: "condition",
 
 export const sgEpCompassPolicy: Policy = {
   id: "sg-ep-stage-2-compass",
-  version: "2026-11-26.1",
+  version: "2026-11-26.2",
   stage: "application",
   name: { en: "COMPASS points or exemption check", zh: "COMPASS 积分或豁免核对" },
   scope: {
-    en: "Checks documented COMPASS exemptions and the 40-point requirement from employer-confirmed scores for this application. The qualifying salary, evidence, employer obligations and full Employment Pass eligibility are separate checks.",
-    zh: "根据本次申请中雇主已核实的积分及豁免依据，核对是否适用豁免或达到 40 分。第一阶段薪资、证明材料、雇主义务及就业准证完整资格须另行核对。",
+    en: "Checks Stage 2 exemptions or the 40-point requirement from employer-confirmed scores. For an existing pass, the check applies during the ordinary renewal window. The qualifying salary, evidence, employer obligations and full Employment Pass eligibility are checked separately.",
+    zh: "根据雇主已核实的积分和豁免依据，核对是否满足第二阶段的豁免或 40 分要求。现有准证在普通续签开放期间适用。第一阶段薪资、证明材料、雇主义务及就业准证完整资格须另行核对。",
   },
-  conditions: [...compassScope, ...sgEpCompassExemptions, ...tierConditions],
+  conditions: [...compassScope, renewalDeadline, renewalWindowOpened, ...sgEpCompassExemptions, ...tierConditions],
   expression: {
     kind: "when",
     test: {
@@ -211,7 +209,10 @@ export const sgEpCompassPolicy: Policy = {
         {
           kind: "when",
           test: condition("sg-ep-compass-renewal"),
-          requirement: condition("sg-ep-compass-renewal-expiry"),
+          requirement: {
+            kind: "all",
+            children: [condition(renewalDeadline.id), condition(renewalWindowOpened.id)],
+          },
         },
       ],
     },

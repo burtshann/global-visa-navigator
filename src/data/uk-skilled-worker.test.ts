@@ -7,6 +7,8 @@ const asOf = "2026-11-27";
 const completeAnswers = {
   ukSkilledWorkerInitial: true,
   ukSkilledApplyingFromAbroad: false,
+  ukSkilledCurrentPermission: "graduate",
+  ukSkilledSwitchStatus: "clear",
   ukSkilledAge: 18,
   ukSkilledJobCos: true,
   ukSkilledCosIssueInWindow: true,
@@ -130,13 +132,13 @@ describe("Option A and CoS evidence", () => {
   });
 
   it.each([
-    [{ ukSkilledSocCode: undefined }, "profile-incomplete"],
-    [{ ukSkilledSocCode: "213" }, "profile-incomplete"],
-    [{ ukSkilledSocCode: "6135" }, "conditions-not-applicable"],
-    [{ ukSkilledStandardOption: undefined }, "profile-incomplete"],
-    [{ ukSkilledStandardOption: false }, "conditions-not-applicable"],
-  ])("separates uncertain inputs from cases outside standard Table 1 coverage (%j)", (answers, status) => {
-    expect(evaluate({ ...completeAnswers, ...answers })).toMatchObject({ status, thresholds: [] });
+    { ukSkilledSocCode: undefined },
+    { ukSkilledSocCode: "213" },
+    { ukSkilledSocCode: "6135" },
+    { ukSkilledStandardOption: undefined },
+    { ukSkilledStandardOption: false },
+  ])("keeps salaries pending when scope or Table 1 coverage has not been established (%j)", (answers) => {
+    expect(evaluate({ ...completeAnswers, ...answers })).toMatchObject({ status: "profile-incomplete", thresholds: [] });
   });
 
   it("requires confirmed sponsor pay and hours before issuing a salary finding", () => {
@@ -200,5 +202,67 @@ describe("Option A and CoS evidence", () => {
     expect(source("uk-sw-cos-issue-window")).toMatchObject({
       effectiveFrom: "2025-04-09", effectiveDateUrl: expect.stringContaining("hc-733"),
     });
+  });
+});
+
+describe("general first-application requirements", () => {
+  it.each([
+    { ukSkilledStandardOption: undefined, ukSkilledSocCode: undefined },
+    { ukSkilledStandardOption: false, ukSkilledSocCode: "2134" },
+    { ukSkilledStandardOption: true, ukSkilledSocCode: "6135" },
+  ])("preserves confirmed general gaps when salary coverage is missing (%j)", (salaryScope) => {
+    const outcome = evaluate({
+      ...completeAnswers,
+      ukSkilledApplyingFromAbroad: true,
+      ukSkilledUsingAfghanNationality: true,
+      ukSkilledAge: 17,
+      ukSkilledJobCos: false,
+      ukSkilledCosUsable: false,
+      ...salaryScope,
+    });
+    expect(outcome).toMatchObject({ status: "conditions-not-met", thresholds: [] });
+    const gaps = outcome.checks.filter(({ status, role }) => status === "fail" && role === "required");
+    expect(gaps.map(({ condition }) => condition.id)).toEqual([
+      "uk-sw-entry-nationality", "uk-sw-age", "uk-sw-job-cos", "uk-sw-cos-usable",
+    ]);
+  });
+
+  it.each([
+    "visitor", "short-term-student", "parent-of-child-student", "seasonal-worker", "domestic-worker", "outside-rules",
+  ])("identifies a barred current or last permission (%s)", (permission) => {
+    const outcome = evaluate({ ...completeAnswers, ukSkilledCurrentPermission: permission });
+    expect(outcome.status).toBe("conditions-not-met");
+    expect(outcome.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "uk-sw-switch-permission" }), status: "fail", role: "required",
+    }));
+  });
+
+  it("keeps in-country coverage pending if permission or immigration status is unknown", () => {
+    expect(evaluate({ ...completeAnswers, ukSkilledCurrentPermission: undefined }).status).toBe("profile-incomplete");
+    expect(evaluate({ ...completeAnswers, ukSkilledSwitchStatus: undefined }).status).toBe("profile-incomplete");
+    expect(evaluate({ ...completeAnswers, ukSkilledSwitchStatus: "not-met" }).status).toBe("conditions-not-met");
+    expect(evaluate({ ...completeAnswers, ukSkilledCurrentPermission: "other-confirmed" }).status).toBe("conditions-met");
+    expect(evaluate({ ...completeAnswers, ukSkilledSwitchStatus: "confirmed-exception" }).status).toBe("conditions-met");
+  });
+
+  it("requires a documented SW 1.5A basis for Student permission", () => {
+    const answers = { ...completeAnswers, ukSkilledCurrentPermission: "student" };
+    expect(evaluate(answers).status).toBe("profile-incomplete");
+    expect(evaluate({ ...answers, ukSkilledStudentSwitchBasis: "none" }).status).toBe("conditions-not-met");
+    for (const basis of ["completed", "degree-start", "phd-start"]) {
+      expect(evaluate({ ...answers, ukSkilledStudentSwitchBasis: basis }).status).toBe("conditions-met");
+    }
+  });
+
+  it("leaves in-country requirements out of entry-clearance checks", () => {
+    const outcome = evaluate({
+      ...completeAnswers,
+      ukSkilledApplyingFromAbroad: true,
+      ukSkilledUsingAfghanNationality: false,
+      ukSkilledCurrentPermission: "visitor",
+      ukSkilledSwitchStatus: undefined,
+    });
+    expect(outcome.status).toBe("conditions-met");
+    expect(outcome.checks.some(({ condition }) => condition.id.startsWith("uk-sw-switch-"))).toBe(false);
   });
 });

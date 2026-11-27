@@ -9,6 +9,7 @@ const sectionLabels = {
   experience: { en: "Experience and other points factors", zh: "职业经验及其他积分因素" },
   finance: { en: "Proof of funds", zh: "资金证明" },
   ukEmployment: { en: "UK occupation and salary", zh: "英国职业及薪资" },
+  ukSponsor: { en: "UK sponsor confirmations", zh: "英国担保资料确认" },
 } satisfies Record<string, Localized>;
 
 type Section = keyof typeof sectionLabels;
@@ -16,6 +17,7 @@ type Question = {
   label: Localized;
   section: Section;
   help?: Localized;
+  visibleFor?: { input: string; value: string };
 } & (
   | { type: "yes-no" }
   | { type: "soc-code" }
@@ -52,39 +54,78 @@ const questions: Record<string, Question> = {
   },
   "answer:ukSkilledUsingAfghanNationality": {
     type: "yes-no", section: "application",
+    visibleFor: { input: "answer:ukSkilledApplyingFromAbroad", value: "yes" },
     label: { en: "If applying from outside the UK, will you use Afghan nationality as your main nationality on this application?", zh: "如从英国境外申请，你会将阿富汗国籍填为本次申请的主要国籍吗？" },
     help: { en: "If you have two nationalities, answer for the passport or travel document used on this application. Leave it blank if you are unsure or applying from within the UK.", zh: "如有双重国籍，请按本次申请使用的护照或旅行证件回答。如不确定或从英国境内申请，请留空。" },
+  },
+  "answer:ukSkilledCurrentPermission": {
+    type: "choice", section: "application",
+    label: { en: "What UK permission do you hold now, or did you hold most recently?", zh: "你目前持有或最近一次获批的英国许可是什么？" },
+    visibleFor: { input: "answer:ukSkilledApplyingFromAbroad", value: "no" },
+    options: [
+      { value: "graduate", label: { en: "Graduate", zh: "Graduate 毕业生许可" } },
+      { value: "student", label: { en: "Student", zh: "Student 学生许可" } },
+      { value: "visitor", label: { en: "Visitor", zh: "访客" } },
+      { value: "short-term-student", label: { en: "Short-term student", zh: "短期学生" } },
+      { value: "parent-of-child-student", label: { en: "Parent of a Child Student", zh: "儿童学生家长" } },
+      { value: "seasonal-worker", label: { en: "Seasonal Worker", zh: "季节性工人" } },
+      { value: "domestic-worker", label: { en: "Domestic Worker in a Private Household", zh: "私人家庭家政工人" } },
+      { value: "outside-rules", label: { en: "Permission granted outside the Immigration Rules", zh: "在移民规则之外获准居留" } },
+      { value: "other-confirmed", label: { en: "Other permission confirmed as outside the excluded categories in SW 1.5ZA", zh: "已核实不属于 SW 1.5ZA 排除类别的其他许可" } },
+    ],
+    help: { en: "Check the official switching rules. Leave blank if you are unsure of your permission or how it is classified.", zh: "请查阅官方转换规则。如不确定许可类别或是否适用，请留空。" },
+  },
+  "answer:ukSkilledSwitchStatus": {
+    type: "choice", section: "application",
+    label: { en: "Which immigration status applies in the UK on your planned application date?", zh: "你在计划递交日的英国移民状态是哪一种？" },
+    visibleFor: { input: "answer:ukSkilledApplyingFromAbroad", value: "no" },
+    options: [
+      { value: "clear", label: { en: "No breach of immigration laws and no immigration bail", zh: "未违反移民法，且未处于移民保释状态" } },
+      { value: "confirmed-exception", label: { en: "Confirmed applicable Part Suitability exception", zh: "已确认适用《适格性条款》的例外" } },
+      { value: "not-met", label: { en: "A breach or immigration bail applies with no applicable exception", zh: "违反移民法或处于移民保释状态，且无适用例外" } },
+    ],
+  },
+  "answer:ukSkilledStudentSwitchBasis": {
+    type: "choice", section: "application",
+    label: { en: "Which Student switching condition can you evidence?", zh: "你可以证明符合哪项 Student 转换条件？" },
+    visibleFor: { input: "answer:ukSkilledCurrentPermission", value: "student" },
+    options: [
+      { value: "completed", label: { en: "Completed the CAS course or a course permitted by ST 27.3", zh: "已完成 CAS 指定课程或 ST 27.3 允许的转修课程" } },
+      { value: "degree-start", label: { en: "Full-time degree-level study or above at a compliant provider, with CoS start on or after course completion", zh: "在有合规记录的高等教育机构全日制修读学位或以上课程，CoS 入职日不早于课程完成日" } },
+      { value: "phd-start", label: { en: "Full-time PhD at a compliant provider, with CoS start at least 24 months after the course began", zh: "在有合规记录的高等教育机构全日制修读博士，CoS 入职日距课程开始至少 24 个月" } },
+      { value: "none", label: { en: "Confirmed that none of the Student conditions apply", zh: "已核实并确认三项条件均不适用" } },
+    ],
   },
   "answer:ukSkilledAge": {
     type: "number", section: "application", min: 0, max: 120, step: 1,
     label: { en: "Age on the Skilled Worker application date", zh: "提交 Skilled Worker 申请当天的年龄" },
   },
   "answer:ukSkilledJobCos": {
-    type: "yes-no", section: "application",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Has the sponsor assigned a Certificate of Sponsorship for this specific UK job?", zh: "担保雇主是否已就这个英国岗位为你分配担保证书（CoS）？" },
     help: { en: "Confirm this CoS states the applicant, this job and salary, the Skilled Worker route and PAYE details where required. For applications abroad, verify that the Home Office allocated the defined CoS for this job.", zh: "请确认该 CoS 载明申请人、岗位、薪资、Skilled Worker 担保类别及适用的 PAYE 信息。从境外申请时，请核实内政部已为该岗位配发 Defined CoS。" },
   },
   "answer:ukSkilledSponsorRated": {
-    type: "yes-no", section: "application",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Have you verified the employer is an A-rated Skilled Worker sponsor authorised for this job?", zh: "你是否已确认该雇主为获准担保这个岗位的 A 级 Skilled Worker 担保机构？" },
     help: { en: "Check the official sponsor register and confirm authorisation for this role with the employer.", zh: "查阅官方担保机构登记册，并向雇主核实该岗位的担保授权。" },
   },
   "answer:ukSkilledCosIssueInWindow": {
-    type: "yes-no", section: "application",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Is the CoS within its issue-to-application time limit?", zh: "担保证明签发后是否仍在适用递交期限内？" },
     help: { en: "Check the planned application date with your sponsor. The usual period is three months. A CoS linked to an SRN uses 90 days, excluding time spent reviewing sponsor-requested changes.", zh: "请与雇主核实计划递交日。通常为三个月。关联担保参考编号（SRN）的证书适用 90 天，扣除雇主请求的修改处于审核中的时间。" },
   },
   "answer:ukSkilledCosStartInWindow": {
-    type: "yes-no", section: "application",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Is the CoS job start date no more than three months after your planned application?", zh: "担保证明注明的入职日是否不晚于计划递交日后三个月？" },
   },
   "answer:ukSkilledCosUsable": {
-    type: "yes-no", section: "application",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Has the sponsor confirmed that this CoS can still be used?", zh: "雇主是否已确认该担保证明仍可使用？" },
     help: { en: "A cancelled or withdrawn CoS, or one used in a granted or refused application, cannot be used. Leave blank if its status is unconfirmed.", zh: "已取消、已撤回或用在获批或被拒申请中的证明不可使用。状态未核实时请留空。" },
   },
   "answer:ukSkilledAtasBasis": {
-    type: "choice", section: "application",
+    type: "choice", section: "ukSponsor",
     label: { en: "What does your sponsor confirm about ATAS?", zh: "雇主对 ATAS 要求作了什么确认？" },
     options: [
       { value: "not-required", label: { en: "CoS confirms ATAS is unnecessary", zh: "担保证明确认无需 ATAS" } },
@@ -93,7 +134,7 @@ const questions: Record<string, Question> = {
     ],
   },
   "answer:ukSkilledStandardOption": {
-    type: "yes-no", section: "ukEmployment",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Has your sponsor confirmed the current standard salary rules under Option A?", zh: "雇主是否已确认适用现行标准薪资选项 A？" },
     help: { en: "Choose Yes only when the sponsor confirms Option A and a CoS issued on or after 22 July 2025. Leave blank if the salary option or applicable rules are unclear.", zh: "仅在雇主确认适用选项 A 且担保证明于 2025 年 7 月 22 日或以后签发时选择「是」。选项或适用规则不明时请留空。" },
   },
@@ -113,7 +154,7 @@ const questions: Record<string, Question> = {
     help: { en: "Use the annual equivalent of the guaranteed eligible pay for all stated hours. Exclude overtime supplements, bonuses and benefits. Ask the sponsor to account for applicable deductions.", zh: "按填报的全部工时填写符合规则的保证薪资年化金额。排除加班补贴、奖金及福利，并请雇主核实适用扣减。" },
   },
   "answer:ukSkilledPayConfirmed": {
-    type: "yes-no", section: "ukEmployment",
+    type: "yes-no", section: "ukSponsor",
     label: { en: "Has the sponsor confirmed these salary figures and fixed weekly hours?", zh: "雇主是否已确认上述薪资和固定每周工时？" },
     help: { en: "Choose Yes only for fixed weekly hours with eligible pay evenly spread across those hours. Ask the sponsor to confirm the annual amount after applying Home Office inclusion and deduction rules.", zh: "仅在每周工时固定、符合口径的薪资均匀分摊到工时，且雇主已按内政部的计入与扣减规则核实年薪时选择「是」。" },
   },
@@ -321,16 +362,12 @@ function QuestionControl({ id, question, language, value, onChange }: {
   );
 }
 
-const ukSalaryEvidenceInputs = new Set([
-  "answer:ukSkilledStandardOption", "answer:ukSkilledJobCos", "answer:ukSkilledSocCode",
-  "answer:ukSkilledWeeklyHours", "answer:ukSkilledAnnualPayGbp",
-]);
-
-export function RuleQuestions({ groups, language, draft, onChange }: {
+export function RuleQuestions({ groups, language, draft, onChange, onResetUkSponsor }: {
   groups: readonly QuestionGroup[];
   language: Language;
   draft: ProfileDraft;
   onChange: (input: string, value: string) => void;
+  onResetUkSponsor: () => void;
 }) {
   if (groups.length === 0) return null;
 
@@ -344,20 +381,23 @@ export function RuleQuestions({ groups, language, draft, onChange }: {
           <fieldset key={route.id}>
             <legend>{route.name[language]}</legend>
             {sections.map((section) => {
-              const fieldsInSection = fields.filter(({ question }) => question.section === section);
+              const fieldsInSection = fields.filter(({ question }) =>
+                question.section === section && (!question.visibleFor || draft[question.visibleFor.input] === question.visibleFor.value),
+              );
               if (fieldsInSection.length === 0) return null;
               return (
                 <div className="question-section" key={section}>
                   <p className="question-section-title">{sectionLabels[section][language]}</p>
+                  {section === "ukSponsor" && (
+                    <>
+                      <p className="field-help">{copy.ukSponsorContext[language]}</p>
+                      <button className="text-button" type="button" onClick={onResetUkSponsor}>{copy.clearUkSponsor[language]}</button>
+                    </>
+                  )}
                   <div className="question-grid">
                     {fieldsInSection.map(({ id, input, question }) => (
                       <QuestionControl id={id} question={question} language={language} key={id}
-                        value={draft[input] ?? ""} onChange={(value) => {
-                          if (ukSalaryEvidenceInputs.has(input) && value !== (draft[input] ?? "")) {
-                            onChange("answer:ukSkilledPayConfirmed", "");
-                          }
-                          onChange(input, value);
-                        }} />
+                        value={draft[input] ?? ""} onChange={(value) => onChange(input, value)} />
                     ))}
                   </div>
                 </div>

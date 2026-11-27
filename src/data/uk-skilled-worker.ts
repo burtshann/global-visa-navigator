@@ -1,5 +1,6 @@
 import type { Condition, Localized, Policy } from "../domain/policy";
 import { generalSalary, goingRate, hourlySalary, optionA, table1Occupation } from "./uk-skilled-worker-standard";
+import { ukSwitchChecks, ukSwitchConditions } from "./uk-skilled-worker-switch";
 
 const t = (en: string, zh: string): Localized => ({ en, zh });
 
@@ -85,12 +86,12 @@ const certificateChecks = [
 
 export const ukSkilledWorkerPolicy: Policy = {
   id: "uk-skilled-worker-initial",
-  version: "2026-11-27.1",
+  version: "2026-11-27.2",
   stage: "application",
   name: t("First Skilled Worker application", "首次申请技术工人签证"),
   scope: t(
-    "This check covers first principal applications under standard salary Option A for a Table 1 job. It checks selected CoS, sponsorship, English and salary requirements using sponsor-confirmed evidence. Other salary options, transition rules, variable hours, maintenance, suitability and full eligibility need separate review.",
-    "本核查适用于以标准薪资选项 A 首次申请的主申请人，岗位须列于表 1。根据雇主确认的资料核对部分担保证明、担保资质、英语和薪资要求。其他薪资选项、过渡安排、变动工时、生活费、适格性及完整资格须另行核实。",
+    "Checks selected general conditions for first principal applications, including in-country switching. Salary is checked for standard Option A jobs in Table 1. Other salary options, transition rules, variable hours, maintenance and full eligibility need separate review.",
+    "适用于首次申请的主申请人，核对部分通用条件，包括境内转换。薪资核对覆盖表 1 岗位的标准选项 A。其他薪资选项、过渡安排、变动工时、生活费及完整资格须另行核实。",
   ),
   conditions: [
     {
@@ -188,6 +189,7 @@ export const ukSkilledWorkerPolicy: Policy = {
       },
     },
     ...certificateChecks,
+    ...ukSwitchConditions,
     optionA,
     table1Occupation,
     generalSalary,
@@ -197,32 +199,39 @@ export const ukSkilledWorkerPolicy: Policy = {
     kind: "when",
     test: { kind: "condition", conditionId: "uk-sw-first-application" },
     requirement: {
-      kind: "when",
-      test: {
-        kind: "all",
-        children: [
-          { kind: "condition", conditionId: optionA.id },
-          { kind: "condition", conditionId: table1Occupation.id },
-        ],
-      },
-      requirement: {
-        kind: "all",
-        children: [
-          {
-            kind: "when",
-            test: { kind: "condition", conditionId: "uk-sw-entry-clearance" },
-            requirement: { kind: "condition", conditionId: "uk-sw-entry-nationality" },
+      kind: "all",
+      children: [
+        {
+          kind: "when",
+          test: { kind: "condition", conditionId: "uk-sw-entry-clearance" },
+          requirement: { kind: "condition", conditionId: "uk-sw-entry-nationality" },
+        },
+        ukSwitchChecks,
+        { kind: "condition", conditionId: "uk-sw-age" },
+        { kind: "condition", conditionId: "uk-sw-job-cos" },
+        { kind: "condition", conditionId: "uk-sw-sponsor" },
+        { kind: "condition", conditionId: "uk-sw-english" },
+        ...certificateChecks.map(({ id }) => ({ kind: "condition" as const, conditionId: id })),
+        {
+          kind: "when",
+          otherwise: "unknown",
+          test: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: optionA.id },
+              { kind: "condition", conditionId: table1Occupation.id },
+            ],
           },
-          { kind: "condition", conditionId: "uk-sw-age" },
-          { kind: "condition", conditionId: "uk-sw-job-cos" },
-          { kind: "condition", conditionId: "uk-sw-sponsor" },
-          { kind: "condition", conditionId: "uk-sw-english" },
-          ...certificateChecks.map(({ id }) => ({ kind: "condition" as const, conditionId: id })),
-          { kind: "condition", conditionId: generalSalary.id },
-          { kind: "condition", conditionId: hourlySalary.id },
-          goingRate,
-        ],
-      },
+          requirement: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: generalSalary.id },
+              { kind: "condition", conditionId: hourlySalary.id },
+              goingRate,
+            ],
+          },
+        },
+      ],
     },
   },
 };

@@ -125,36 +125,53 @@ test("does not transmit profile inputs or retain them after reloading", async ({
   expect(requests.some((request) => request.includes(marker))).toBe(false);
 });
 
-async function confirmUkCoS(page: Page) {
-  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
-  await answer("ukSkilledCosIssueInWindow").selectOption("yes");
-  await answer("ukSkilledCosStartInWindow").selectOption("yes");
-  await answer("ukSkilledCosUsable").selectOption("yes");
+const ukSponsorFields = [
+  "ukSkilledJobCos", "ukSkilledSponsorRated", "ukSkilledCosIssueInWindow",
+  "ukSkilledCosStartInWindow", "ukSkilledCosUsable", "ukSkilledAtasBasis",
+  "ukSkilledStandardOption", "ukSkilledPayConfirmed",
+];
+
+function ukAnswers(page: Page) {
+  return (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
+}
+
+async function enterUkJob(page: Page, hours = "37.5", pay = "54700") {
+  const answer = ukAnswers(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledAge").fill("30");
+  await answer("ukSkilledEnglishBasis").selectOption("selt-b2");
+  await answer("ukSkilledSocCode").fill("2134");
+  await answer("ukSkilledWeeklyHours").fill(hours);
+  await answer("ukSkilledAnnualPayGbp").fill(pay);
+}
+
+async function confirmUkCoS(page: Page, confirmPay = true) {
+  const answer = ukAnswers(page);
+  for (const field of ukSponsorFields.slice(0, 5)) await answer(field).selectOption("yes");
   await answer("ukSkilledAtasBasis").selectOption("not-required");
+  await answer("ukSkilledStandardOption").selectOption("yes");
+  if (confirmPay) await answer("ukSkilledPayConfirmed").selectOption("yes");
+}
+
+async function expectUkEvidenceCleared(page: Page) {
+  for (const field of ukSponsorFields) await expect(ukAnswers(page)(field)).toHaveValue("");
 }
 
 test("checks Skilled Worker evidence and keeps full UK eligibility pending", async ({ page }) => {
   await openEnglish(page);
-  await page.getByLabel("Main goal").selectOption("skilled-work");
-  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
-  await answer("ukSkilledWorkerInitial").selectOption("yes");
-  await answer("ukSkilledStandardOption").selectOption("yes");
-  await answer("ukSkilledSocCode").fill("2134");
-  await answer("ukSkilledWeeklyHours").fill("37.5");
-  await answer("ukSkilledAnnualPayGbp").fill("54700");
+  await enterUkJob(page);
+  const answer = ukAnswers(page);
   await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
   await answer("ukSkilledAge").fill("18");
   await answer("ukSkilledJobCos").selectOption("no");
-  await answer("ukSkilledSponsorRated").selectOption("yes");
 
   const results = await checkProfile(page);
   const skilledWorker = results.locator('[data-route-id="uk-skilled-worker"]');
   await expect(skilledWorker.getByText("Gaps in checked requirements", { exact: true })).toBeVisible();
   await expect(skilledWorker.getByText("Information still needed", { exact: true })).toBeVisible();
-  await answer("ukSkilledJobCos").selectOption("yes");
-  await answer("ukSkilledEnglishBasis").selectOption("other-verified-evidence");
   await confirmUkCoS(page);
-  await answer("ukSkilledPayConfirmed").selectOption("yes");
+  await answer("ukSkilledEnglishBasis").selectOption("other-verified-evidence");
   await checkProfile(page);
   await expect(skilledWorker.getByText("More information needed", { exact: true })).toBeVisible();
 
@@ -168,7 +185,14 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
   await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
 
   await answer("ukSkilledApplyingFromAbroad").selectOption("no");
-  await answer("ukSkilledUsingAfghanNationality").selectOption("");
+  await expect(answer("ukSkilledUsingAfghanNationality")).toHaveCount(0);
+  await expectUkEvidenceCleared(page);
+  await answer("ukSkilledCurrentPermission").selectOption("graduate");
+  await answer("ukSkilledSwitchStatus").selectOption("clear");
+  await checkProfile(page);
+  await expect(skilledWorker.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await confirmUkCoS(page);
   await checkProfile(page);
   await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
   await expect(skilledWorker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
@@ -176,19 +200,12 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
 
 test("checks the prorated UK going rate only after the sponsor confirms the Table 1 evidence", async ({ page }) => {
   await openEnglish(page);
-  await page.getByLabel("Main goal").selectOption("skilled-work");
-  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
-  await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await enterUkJob(page, "40", "58346.66");
+  const answer = ukAnswers(page);
   await answer("ukSkilledApplyingFromAbroad").selectOption("no");
-  await answer("ukSkilledAge").fill("30");
-  await answer("ukSkilledJobCos").selectOption("yes");
-  await answer("ukSkilledSponsorRated").selectOption("yes");
-  await confirmUkCoS(page);
-  await answer("ukSkilledEnglishBasis").selectOption("selt-b2");
-  await answer("ukSkilledStandardOption").selectOption("yes");
-  await answer("ukSkilledSocCode").fill("2134");
-  await answer("ukSkilledWeeklyHours").fill("40");
-  await answer("ukSkilledAnnualPayGbp").fill("58346.66");
+  await answer("ukSkilledCurrentPermission").selectOption("graduate");
+  await answer("ukSkilledSwitchStatus").selectOption("clear");
+  await confirmUkCoS(page, false);
 
   const results = await checkProfile(page);
   const worker = results.locator('[data-route-id="uk-skilled-worker"]');
@@ -200,16 +217,141 @@ test("checks the prorated UK going rate only after the sponsor confirms the Tabl
   await expect(worker.getByText(/54,700 GBP per year at 37.5 hours/)).toBeVisible();
 
   await answer("ukSkilledAnnualPayGbp").fill("58346.67");
-  await expect(answer("ukSkilledPayConfirmed")).toHaveValue("");
-  await answer("ukSkilledPayConfirmed").selectOption("yes");
+  await expectUkEvidenceCleared(page);
+  await confirmUkCoS(page);
   await checkProfile(page);
   await expect(worker.getByText("All checked conditions met", { exact: true })).toBeVisible();
   await expect(worker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
 
   await answer("ukSkilledSocCode").fill("6135");
+  await expectUkEvidenceCleared(page);
+  await confirmUkCoS(page);
   await checkProfile(page);
-  await expect(worker.getByText("These checks do not apply", { exact: true })).toBeVisible();
+  await expect(worker.getByText("More information needed", { exact: true })).toBeVisible();
   await expect(worker.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
+});
+
+test("reports UK general gaps ahead of unresolved salary coverage", async ({ page }) => {
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  const answer = ukAnswers(page);
+  await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
+  await answer("ukSkilledUsingAfghanNationality").selectOption("yes");
+  await answer("ukSkilledAge").fill("17");
+  await answer("ukSkilledJobCos").selectOption("no");
+  await answer("ukSkilledCosUsable").selectOption("no");
+  const results = await checkProfile(page);
+  const worker = results.locator('[data-route-id="uk-skilled-worker"]');
+  const first = results.locator(".match-card").first();
+
+  for (const option of ["", "no"]) {
+    if (option) {
+      await answer("ukSkilledStandardOption").selectOption(option);
+      await checkProfile(page);
+    }
+    await expect(worker.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+    await expect(worker.getByText(/using Afghan nationality are refused/)).toBeVisible();
+    await expect(worker.getByText("At least 18 years old on the application date")).toBeVisible();
+    await expect(worker.getByText("The CoS remains usable for this application")).toBeVisible();
+    await expect(worker.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
+    await expect(first).toHaveAttribute("data-route-id", "sg-employment-pass");
+  }
+});
+
+test("checks in-country permission and requires fresh evidence when switching to entry clearance", async ({ page }) => {
+  await openEnglish(page);
+  await enterUkJob(page);
+  const answer = ukAnswers(page);
+  await answer("ukSkilledApplyingFromAbroad").selectOption("no");
+  await confirmUkCoS(page);
+  const results = await checkProfile(page);
+  const worker = results.locator('[data-route-id="uk-skilled-worker"]');
+  const pending = worker.getByText("More information needed", { exact: true });
+  const passed = worker.getByText("All checked conditions met", { exact: true });
+  await expect(pending).toBeVisible();
+
+  await answer("ukSkilledCurrentPermission").selectOption("visitor");
+  await checkProfile(page);
+  await expect(worker.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(worker.getByText(/you need to leave the UK and apply from abroad/)).toBeVisible();
+
+  await answer("ukSkilledCurrentPermission").selectOption("student");
+  await answer("ukSkilledSwitchStatus").selectOption("clear");
+  await confirmUkCoS(page);
+  await checkProfile(page);
+  await expect(pending).toBeVisible();
+  await expect(worker.getByText("Student switch meets one of the course or sponsored start-date conditions")).toBeVisible();
+
+  await answer("ukSkilledStudentSwitchBasis").selectOption("degree-start");
+  await checkProfile(page);
+  await expect(passed).toBeVisible();
+
+  await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
+  await answer("ukSkilledUsingAfghanNationality").selectOption("no");
+  await expect(answer("ukSkilledCurrentPermission")).toHaveCount(0);
+  await expectUkEvidenceCleared(page);
+  await checkProfile(page);
+  await expect(pending).toBeVisible();
+
+  await confirmUkCoS(page);
+  await checkProfile(page);
+  await expect(passed).toBeVisible();
+});
+
+test("keeps UK sponsor evidence across a same-context retry and clears it after rule changes", async ({ page }) => {
+  const serverClock = ".next/e2e-assessment-clock";
+  try {
+    await writeFile(serverClock, "2026-11-27T23:59:00Z");
+    await openEnglish(page);
+    await enterUkJob(page);
+    const answer = ukAnswers(page);
+    await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
+    await answer("ukSkilledUsingAfghanNationality").selectOption("no");
+    await confirmUkCoS(page);
+    const results = await checkProfile(page);
+    const worker = results.locator('[data-route-id="uk-skilled-worker"]');
+    const passed = worker.getByText("All checked conditions met", { exact: true });
+    const pending = worker.getByText("More information needed", { exact: true });
+    await expect(passed).toBeVisible();
+
+    await page.route("**/api/assessment", (route) => route.fulfill({ status: 503 }));
+    await page.getByRole("button", { name: "Check published rules" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Current rules could not be loaded" })).toBeVisible();
+    await expect(answer("ukSkilledCosUsable")).toHaveValue("yes");
+    await page.unroute("**/api/assessment");
+    await checkProfile(page);
+    await expect(passed).toBeVisible();
+
+    await writeFile(serverClock, "2026-11-28T00:01:00Z");
+    await checkProfile(page);
+    await expect(worker.locator("time")).toHaveText("2026-11-28");
+    await expectUkEvidenceCleared(page);
+    await expect(answer("ukSkilledSocCode")).toHaveValue("2134");
+    await expect(pending).toBeVisible();
+
+    await confirmUkCoS(page);
+    await checkProfile(page);
+    await expect(passed).toBeVisible();
+
+    await page.route("**/api/assessment", async (route) => {
+      const live = await route.fetch();
+      const metadata = await live.json();
+      const ukPolicy = metadata.policies["uk-skilled-worker"].policy;
+      ukPolicy.version += ".test-update";
+      await route.fulfill({ response: live, json: metadata });
+    });
+    await checkProfile(page);
+    await expectUkEvidenceCleared(page);
+    await expect(pending).toBeVisible();
+
+    await confirmUkCoS(page);
+    await page.getByRole("button", { name: "Clear UK sponsor confirmations" }).click();
+    await expectUkEvidenceCleared(page);
+    await expect(answer("ukSkilledAnnualPayGbp")).toHaveValue("54700");
+  } finally {
+    await rm(serverClock, { force: true });
+  }
 });
 
 test("refreshes the Singapore rule after local midnight without reloading or sending answers", async ({ page }) => {

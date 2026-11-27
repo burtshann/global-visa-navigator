@@ -77,7 +77,13 @@ type ThresholdTable = Readonly<RuleSummary & {
 export type RuleExpression =
   | Readonly<{ kind: "condition"; conditionId: string }>
   | Readonly<{ kind: "all" | "any"; children: readonly RuleExpression[]; summary?: RuleSummary }>
-  | Readonly<{ kind: "when" | "unless"; test: RuleExpression; requirement: RuleExpression }>
+  | Readonly<{
+    kind: "when" | "unless";
+    test: RuleExpression;
+    requirement: RuleExpression;
+    // Leave coverage unresolved when this is the only checked branch of a required condition.
+    otherwise?: "unknown";
+  }>
   | Readonly<RuleSummary & {
     kind: "points";
     source: RuleSource;
@@ -431,7 +437,7 @@ function evaluateExpression(
         return { kind, status: "unknown", children: [test] };
       }
       if ((kind === "when" && test.status === "fail") || (kind === "unless" && test.status === "pass")) {
-        return { kind, status: "not-applicable", children: [test] };
+        return { kind, status: expression.otherwise ?? "not-applicable", children: [test] };
       }
       const requirement = evaluateExpression(expression.requirement, context, role);
       return { kind, status: requirement.status, children: [test, requirement] };

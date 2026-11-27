@@ -8,6 +8,7 @@ const sectionLabels = {
   education: { en: "Education and language", zh: "学历与语言" },
   experience: { en: "Experience and other points factors", zh: "职业经验及其他积分因素" },
   finance: { en: "Proof of funds", zh: "资金证明" },
+  ukEmployment: { en: "UK occupation and salary", zh: "英国职业及薪资" },
 } satisfies Record<string, Localized>;
 
 type Section = keyof typeof sectionLabels;
@@ -17,6 +18,7 @@ type Question = {
   help?: Localized;
 } & (
   | { type: "yes-no" }
+  | { type: "soc-code" }
   | { type: "number"; min: number; max?: number; step?: number }
   | { type: "choice"; options: readonly { value: string; label: Localized }[] }
 );
@@ -60,12 +62,60 @@ const questions: Record<string, Question> = {
   "answer:ukSkilledJobCos": {
     type: "yes-no", section: "application",
     label: { en: "Has the sponsor assigned a Certificate of Sponsorship for this specific UK job?", zh: "担保雇主是否已就这个英国岗位为你分配担保证书（CoS）？" },
-    help: { en: "Confirm that the CoS is for this job and application location. If you apply from abroad, it must be a defined CoS allocated by the Home Office.", zh: "确认 CoS 对应此次岗位和申请地点。如在英国境外申请，须为内政部配发的 Defined CoS。" },
+    help: { en: "Confirm this CoS states the applicant, this job and salary, the Skilled Worker route and PAYE details where required. For applications abroad, verify that the Home Office allocated the defined CoS for this job.", zh: "请确认该 CoS 载明申请人、岗位、薪资、Skilled Worker 担保类别及适用的 PAYE 信息。从境外申请时，请核实内政部已为该岗位配发 Defined CoS。" },
   },
   "answer:ukSkilledSponsorRated": {
     type: "yes-no", section: "application",
     label: { en: "Have you verified the employer is an A-rated Skilled Worker sponsor authorised for this job?", zh: "你是否已确认该雇主为获准担保这个岗位的 A 级 Skilled Worker 担保机构？" },
     help: { en: "Check the official sponsor register and confirm authorisation for this role with the employer.", zh: "查阅官方担保机构登记册，并向雇主核实该岗位的担保授权。" },
+  },
+  "answer:ukSkilledCosIssueInWindow": {
+    type: "yes-no", section: "application",
+    label: { en: "Is the CoS within its issue-to-application time limit?", zh: "担保证明签发后是否仍在适用递交期限内？" },
+    help: { en: "Check the planned application date with your sponsor. The usual period is three months. A CoS linked to an SRN uses 90 days, excluding time spent reviewing sponsor-requested changes.", zh: "请与雇主核实计划递交日。通常为三个月。关联担保参考编号（SRN）的证书适用 90 天，扣除雇主请求的修改处于审核中的时间。" },
+  },
+  "answer:ukSkilledCosStartInWindow": {
+    type: "yes-no", section: "application",
+    label: { en: "Is the CoS job start date no more than three months after your planned application?", zh: "担保证明注明的入职日是否不晚于计划递交日后三个月？" },
+  },
+  "answer:ukSkilledCosUsable": {
+    type: "yes-no", section: "application",
+    label: { en: "Has the sponsor confirmed that this CoS can still be used?", zh: "雇主是否已确认该担保证明仍可使用？" },
+    help: { en: "A cancelled or withdrawn CoS, or one used in a granted or refused application, cannot be used. Leave blank if its status is unconfirmed.", zh: "已取消、已撤回或用在获批或被拒申请中的证明不可使用。状态未核实时请留空。" },
+  },
+  "answer:ukSkilledAtasBasis": {
+    type: "choice", section: "application",
+    label: { en: "What does your sponsor confirm about ATAS?", zh: "雇主对 ATAS 要求作了什么确认？" },
+    options: [
+      { value: "not-required", label: { en: "CoS confirms ATAS is unnecessary", zh: "担保证明确认无需 ATAS" } },
+      { value: "valid", label: { en: "ATAS applies and I have a valid certificate", zh: "适用 ATAS，且已持有有效证书" } },
+      { value: "required-missing", label: { en: "ATAS applies and I lack a valid certificate", zh: "适用 ATAS，但未持有有效证书" } },
+    ],
+  },
+  "answer:ukSkilledStandardOption": {
+    type: "yes-no", section: "ukEmployment",
+    label: { en: "Has your sponsor confirmed the current standard salary rules under Option A?", zh: "雇主是否已确认适用现行标准薪资选项 A？" },
+    help: { en: "Choose Yes only when the sponsor confirms Option A and a CoS issued on or after 22 July 2025. Leave blank if the salary option or applicable rules are unclear.", zh: "仅在雇主确认适用选项 A 且担保证明于 2025 年 7 月 22 日或以后签发时选择「是」。选项或适用规则不明时请留空。" },
+  },
+  "answer:ukSkilledSocCode": {
+    type: "soc-code", section: "ukEmployment",
+    label: { en: "SOC 2020 occupation code on the CoS", zh: "担保证明上的 SOC 2020 职业代码" },
+    help: { en: "Enter four digits as confirmed by the sponsor for your role. A code outside Table 1 needs a separate check.", zh: "请输入雇主为该岗位确认的四位代码。表 1 之外的代码需另行核实。" },
+  },
+  "answer:ukSkilledWeeklyHours": {
+    type: "number", section: "ukEmployment", min: 0.01, max: 168, step: 0.01,
+    label: { en: "Fixed weekly hours on the CoS", zh: "担保证明上的固定每周工时" },
+    help: { en: "Provide all weekly hours, including any above 48. Leave blank for variable cycles.", zh: "填写全部每周工时，包括超过 48 小时的部分。工时不固定时请留空。" },
+  },
+  "answer:ukSkilledAnnualPayGbp": {
+    type: "number", section: "ukEmployment", min: 0, step: 0.01,
+    label: { en: "Eligible gross annual salary confirmed by your sponsor (GBP)", zh: "雇主确认符合计算口径的税前年薪（英镑）" },
+    help: { en: "Use the annual equivalent of the guaranteed eligible pay for all stated hours. Exclude overtime supplements, bonuses and benefits. Ask the sponsor to account for applicable deductions.", zh: "按填报的全部工时填写符合规则的保证薪资年化金额。排除加班补贴、奖金及福利，并请雇主核实适用扣减。" },
+  },
+  "answer:ukSkilledPayConfirmed": {
+    type: "yes-no", section: "ukEmployment",
+    label: { en: "Has the sponsor confirmed these salary figures and fixed weekly hours?", zh: "雇主是否已确认上述薪资和固定每周工时？" },
+    help: { en: "Choose Yes only for fixed weekly hours with eligible pay evenly spread across those hours. Ask the sponsor to confirm the annual amount after applying Home Office inclusion and deduction rules.", zh: "仅在每周工时固定、符合口径的薪资均匀分摊到工时，且雇主已按内政部的计入与扣减规则核实年薪时选择「是」。" },
   },
   "answer:ukSkilledEnglishBasis": {
     type: "choice", section: "education",
@@ -200,6 +250,10 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
       inputs.add("answer:deContractNetEurMonthly");
       inputs.add("answer:deBlockedEurMonthly");
     }
+    if (inputs.has("answer:ukSkilledCappedAnnualPayGbp")) {
+      inputs.add("answer:ukSkilledAnnualPayGbp");
+      inputs.add("answer:ukSkilledPayConfirmed");
+    }
     const fields = orderedInputs.flatMap((input) => {
       if (!inputs.has(input) || seen.has(input)) return [];
       seen.add(input);
@@ -253,6 +307,9 @@ function QuestionControl({ id, question, language, value, onChange }: {
         <input id={id} type="number" min={question.min} max={question.max} step={question.step}
           value={value} onChange={(event) => onChange(event.target.value)}
           inputMode={question.step === 1 ? "numeric" : "decimal"} aria-describedby={helpId} />
+      ) : question.type === "soc-code" ? (
+        <input id={id} type="text" inputMode="numeric" maxLength={4}
+          value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId} />
       ) : (
         <select id={id} value={value} onChange={(event) => onChange(event.target.value)} aria-describedby={helpId}>
           <option value="">{copy.unfinished[language]}</option>
@@ -263,6 +320,11 @@ function QuestionControl({ id, question, language, value, onChange }: {
     </div>
   );
 }
+
+const ukSalaryEvidenceInputs = new Set([
+  "answer:ukSkilledStandardOption", "answer:ukSkilledJobCos", "answer:ukSkilledSocCode",
+  "answer:ukSkilledWeeklyHours", "answer:ukSkilledAnnualPayGbp",
+]);
 
 export function RuleQuestions({ groups, language, draft, onChange }: {
   groups: readonly QuestionGroup[];
@@ -290,7 +352,12 @@ export function RuleQuestions({ groups, language, draft, onChange }: {
                   <div className="question-grid">
                     {fieldsInSection.map(({ id, input, question }) => (
                       <QuestionControl id={id} question={question} language={language} key={id}
-                        value={draft[input] ?? ""} onChange={(value) => onChange(input, value)} />
+                        value={draft[input] ?? ""} onChange={(value) => {
+                          if (ukSalaryEvidenceInputs.has(input) && value !== (draft[input] ?? "")) {
+                            onChange("answer:ukSkilledPayConfirmed", "");
+                          }
+                          onChange(input, value);
+                        }} />
                     ))}
                   </div>
                 </div>

@@ -125,11 +125,23 @@ test("does not transmit profile inputs or retain them after reloading", async ({
   expect(requests.some((request) => request.includes(marker))).toBe(false);
 });
 
+async function confirmUkCoS(page: Page) {
+  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
+  await answer("ukSkilledCosIssueInWindow").selectOption("yes");
+  await answer("ukSkilledCosStartInWindow").selectOption("yes");
+  await answer("ukSkilledCosUsable").selectOption("yes");
+  await answer("ukSkilledAtasBasis").selectOption("not-required");
+}
+
 test("checks Skilled Worker evidence and keeps full UK eligibility pending", async ({ page }) => {
   await openEnglish(page);
   await page.getByLabel("Main goal").selectOption("skilled-work");
   const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
   await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledStandardOption").selectOption("yes");
+  await answer("ukSkilledSocCode").fill("2134");
+  await answer("ukSkilledWeeklyHours").fill("37.5");
+  await answer("ukSkilledAnnualPayGbp").fill("54700");
   await answer("ukSkilledApplyingFromAbroad").selectOption("yes");
   await answer("ukSkilledAge").fill("18");
   await answer("ukSkilledJobCos").selectOption("no");
@@ -141,6 +153,8 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
   await expect(skilledWorker.getByText("Information still needed", { exact: true })).toBeVisible();
   await answer("ukSkilledJobCos").selectOption("yes");
   await answer("ukSkilledEnglishBasis").selectOption("other-verified-evidence");
+  await confirmUkCoS(page);
+  await answer("ukSkilledPayConfirmed").selectOption("yes");
   await checkProfile(page);
   await expect(skilledWorker.getByText("More information needed", { exact: true })).toBeVisible();
 
@@ -158,6 +172,44 @@ test("checks Skilled Worker evidence and keeps full UK eligibility pending", asy
   await checkProfile(page);
   await expect(skilledWorker.getByText("All checked conditions met", { exact: true })).toBeVisible();
   await expect(skilledWorker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+});
+
+test("checks the prorated UK going rate only after the sponsor confirms the Table 1 evidence", async ({ page }) => {
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  const answer = (name: string) => page.locator(`#question-uk-skilled-worker-${name}`);
+  await answer("ukSkilledWorkerInitial").selectOption("yes");
+  await answer("ukSkilledApplyingFromAbroad").selectOption("no");
+  await answer("ukSkilledAge").fill("30");
+  await answer("ukSkilledJobCos").selectOption("yes");
+  await answer("ukSkilledSponsorRated").selectOption("yes");
+  await confirmUkCoS(page);
+  await answer("ukSkilledEnglishBasis").selectOption("selt-b2");
+  await answer("ukSkilledStandardOption").selectOption("yes");
+  await answer("ukSkilledSocCode").fill("2134");
+  await answer("ukSkilledWeeklyHours").fill("40");
+  await answer("ukSkilledAnnualPayGbp").fill("58346.66");
+
+  const results = await checkProfile(page);
+  const worker = results.locator('[data-route-id="uk-skilled-worker"]');
+  await expect(worker.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await answer("ukSkilledPayConfirmed").selectOption("yes");
+  await checkProfile(page);
+  await expect(worker.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(worker.getByText(/54,700 GBP per year at 37.5 hours/)).toBeVisible();
+
+  await answer("ukSkilledAnnualPayGbp").fill("58346.67");
+  await expect(answer("ukSkilledPayConfirmed")).toHaveValue("");
+  await answer("ukSkilledPayConfirmed").selectOption("yes");
+  await checkProfile(page);
+  await expect(worker.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(worker.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
+
+  await answer("ukSkilledSocCode").fill("6135");
+  await checkProfile(page);
+  await expect(worker.getByText("These checks do not apply", { exact: true })).toBeVisible();
+  await expect(worker.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
 });
 
 test("refreshes the Singapore rule after local midnight without reloading or sending answers", async ({ page }) => {

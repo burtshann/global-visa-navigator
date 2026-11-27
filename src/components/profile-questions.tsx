@@ -93,6 +93,17 @@ const questions: Record<string, Question> = {
     label: { en: "Do you have a job offer in Singapore?", zh: "你是否已获得在新加坡工作的录用邀请？" },
     visibleFor: { input: "answer:sgEpInitialApplication", value: "yes" },
   },
+  "answer:sgEpRenewalOrdinary": {
+    type: "yes-no", section: "application",
+    label: { en: "Which type of Employment Pass do you currently hold?", zh: "你目前持有哪种就业准证？" },
+    yesLabel: { en: "Ordinary Employment Pass", zh: "普通就业准证" },
+    noLabel: { en: "Employment Pass (Sponsorship)", zh: "担保类就业准证" },
+    help: {
+      en: "Leave this unanswered if you are unsure. For an EP (Sponsorship), the employer should verify the separate three-month renewal window with MOM.",
+      zh: "不确定时请留空。持担保类就业准证时，请由雇主与新加坡人力部核实另行适用的三个月续签窗口。",
+    },
+    visibleFor: { input: "answer:sgEpInitialApplication", value: "no" },
+  },
   "answer:sgEpRenewalExpiryDate": {
     type: "date", section: "application",
     label: { en: "Expiry date on the current Employment Pass", zh: "现有就业准证到期日" },
@@ -239,6 +250,7 @@ const compassApplicationInputs = [
   "answer:sgEpAge",
   "answer:sgEpFinancialSector",
   "answer:sgEpFixedMonthlySalarySgd",
+  "answer:sgEpRenewalOrdinary",
   "answer:sgEpRenewalExpiryDate",
   "answer:sgEpRenewalSameEmployerRole",
 ];

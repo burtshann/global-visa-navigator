@@ -45,14 +45,14 @@
 - **2025 版新申请工资表**适用于 2025 年 1 月 1 日起，至 2027 年 1 月 1 日前的递交日期。按行业及年龄查表。 [2024 年生效公告](https://www.mom.gov.sg/newsroom/press-releases/2024/cos-foreign-workforce-policy-factsheet)
 - **2027 版新申请工资表**自新加坡当地日期 2027 年 1 月 1 日起适用。 [2026 年政策公告](https://www.mom.gov.sg/newsroom/press-releases/2026/0303-partnering-businesses-and-workers-to-thrive-in-a-changed-world)
 
-2026 年 11 月 27 日（新加坡时间）核对续签工资表、COMPASS 积分及豁免。以下两个快照的版本均为 `2026-11-26.2`，版本日期采用 UTC。生产环境需经人工独立审核，在 PostgreSQL 中批准与 Git 提交一致的快照后方可启用。 [政策发布流程](testing-deployment.md)
+2026 年 11 月 27 日（新加坡时间）核对续签工资表、COMPASS 积分及豁免。以下两个快照的版本均为 `2026-11-27.1`，版本日期采用 UTC。生产环境需经人工独立审核，在 PostgreSQL 中批准与 Git 提交一致的快照后方可启用。 [政策发布流程](testing-deployment.md)
 
-- **续签第一阶段**（`sg-ep-stage-1-renewal`）核对是否继续在同一雇主处从事管理、高管或专业岗位，并按现有准证到期日选表。2026 年 1 月 1 日至 2027 年 12 月 31 日到期使用原表。2028 年 1 月 1 日起到期使用调整后标准，即使提前递交也按到期日选表。普通续签按新加坡当地核对日计算，开放日为到期前 180 天，须在到期日前递交。到期当日及之后应请雇主重新申请准证。担保类就业准证的三个月窗口仍需另行核实。 [薪资表](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility) · [续签流程](https://www.mom.gov.sg/passes-and-permits/employment-pass/renew-a-pass) · [2026 年政策公告](https://www.mom.gov.sg/newsroom/press-releases/2026/0303-partnering-businesses-and-workers-to-thrive-in-a-changed-world)
-- **第二阶段**（`sg-ep-stage-2-compass`）新申请自 2023 年 9 月 1 日适用。续签自准证于 2024 年 9 月 1 日起到期时适用。本工具只对当前续签窗口内的准证核对积分。固定月薪至少 S$22,500、适用贸易协定下的海外公司内部调动、岗位期限一个月或更短，均为官方豁免依据。其他情况需达到 C1 至 C6 合计 40 分。按雇主自评工具确认的分项积分计算，未确认分数保留未知并显示上下界。C5 及 C6 加分所需证据由雇主核实。 [生效公告](https://www.mom.gov.sg/newsroom/press-releases/2023/0329-details-on-compass-bonus-criteria) · [COMPASS 规则及豁免](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility) · [MOM 自评工具](https://www.mom.gov.sg/eservices/services/employment-s-pass-self-assessment-tool)
+- **续签第一阶段**（`sg-ep-stage-1-renewal`）核对是否继续在同一雇主处从事管理、高管或专业岗位，并按现有准证到期日选表。2026 年 1 月 1 日至 2027 年 12 月 31 日到期使用原表。2028 年 1 月 1 日起到期使用调整后标准，即使提前递交也按到期日选表。所有准证类型都须在到期日前递交，按新加坡当地核对日计算。到期当日及之后应请雇主重新申请准证。确认持有普通准证后才按到期前 180 天判断开放日。准证类型不明时保留待核实，担保类准证的三个月窗口请由雇主向新加坡人力部核实。 [薪资表](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility) · [续签流程](https://www.mom.gov.sg/passes-and-permits/employment-pass/renew-a-pass) · [2026 年政策公告](https://www.mom.gov.sg/newsroom/press-releases/2026/0303-partnering-businesses-and-workers-to-thrive-in-a-changed-world)
+- **第二阶段**（`sg-ep-stage-2-compass`）新申请自 2023 年 9 月 1 日适用。续签自准证于 2024 年 9 月 1 日起到期时适用。本工具对已确认持有普通准证且处于当前续签窗口内的申请核对积分。固定月薪至少 S$22,500、适用贸易协定下的海外公司内部调动、岗位期限一个月或更短，均为官方豁免依据。其他情况需达到 C1 至 C6 合计 40 分。按雇主自评工具确认的分项积分计算，未确认分数保留未知并显示上下界。C5 及 C6 加分所需证据由雇主核实。 [生效公告](https://www.mom.gov.sg/newsroom/press-releases/2023/0329-details-on-compass-bonus-criteria) · [COMPASS 规则及豁免](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility) · [MOM 自评工具](https://www.mom.gov.sg/eservices/services/employment-s-pass-self-assessment-tool)
 
 工资表的年龄、行业或月薪资料不足时，保留待核实状态。公平考量框架、特殊政策安排、证明材料以及完整申请资格仍须单独核实。
 
-每次提交问卷时，页面重新获取服务器按当前政策日期筛选的规则。就业准证的排序以两个必要阶段中条件较欠缺的一项为准。缺少已发布的必要阶段时显示未覆盖。申请类型、到期日、雇主及岗位相关答案、年龄、雇主行业、薪资、新加坡当地核对日或 COMPASS 规则版本变化时，雇主确认的 COMPASS 积分及非薪资豁免须重新填写。问卷答案留在浏览器内，核对结果显示实际使用的新加坡政策日期。 [C1 薪资基准版本及适用日期](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility/compass-c1-salary-benchmarks) · [C2 学历清单及适用日期](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility)
+每次提交问卷时，页面重新获取服务器按当前政策日期筛选的规则。就业准证的排序以两个必要阶段中条件较欠缺的一项为准。缺少已发布的必要阶段时显示未覆盖。申请类型、现有准证类型、到期日、雇主及岗位相关答案、年龄、雇主行业、薪资、新加坡当地核对日或 COMPASS 规则版本变化时，雇主确认的 COMPASS 积分及非薪资豁免须重新填写。问卷答案留在浏览器内，核对结果显示实际使用的新加坡政策日期。 [C1 薪资基准版本及适用日期](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility/compass-c1-salary-benchmarks) · [C2 学历清单及适用日期](https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility)
 
 ### 第三阶段英国 Skilled Worker
 

@@ -3,7 +3,7 @@ import { evaluatePathway, evaluatePolicy, type Profile } from "../domain/policy"
 import { prepareMatchingProfile } from "./matching-profile";
 import { sgEpCompassPolicy } from "./sg-ep-compass";
 
-const asOf = "2026-11-26";
+const asOf = "2026-11-27";
 const noExemption: Profile["answers"] = {
   sgEpInitialApplication: true,
   sgEpFixedMonthlySalarySgd: 10_000,
@@ -71,15 +71,45 @@ describe("Employment Pass COMPASS", () => {
 
   it.each(["2024-09-01", "2026-11-25", asOf, "2027-11-26"])("does not score a renewal outside its current filing window (%s)", (expiry) => {
     expect(evaluate({
-      ...zeroPoints, sgEpCompassShortRole: true, sgEpInitialApplication: false, sgEpRenewalExpiryDate: expiry,
+      ...zeroPoints, sgEpCompassShortRole: true, sgEpInitialApplication: false, sgEpRenewalOrdinary: true, sgEpRenewalExpiryDate: expiry,
     })).toMatchObject({ status: "conditions-not-applicable", scores: [] });
   });
 
   it("checks a renewal in its filing window and leaves an unknown type or expiry unresolved", () => {
-    const answers = { ...zeroPoints, sgEpCompassShortRole: true };
-    expect(evaluate({ ...answers, sgEpInitialApplication: false, sgEpRenewalExpiryDate: "2026-11-27" }).status).toBe("conditions-met");
+    const answers = { ...zeroPoints, sgEpCompassShortRole: true, sgEpRenewalOrdinary: true };
+    expect(evaluate({ ...answers, sgEpInitialApplication: false, sgEpRenewalExpiryDate: "2026-11-28" }).status).toBe("conditions-met");
     expect(evaluate({ ...answers, sgEpInitialApplication: false }).status).toBe("profile-incomplete");
     expect(evaluate({ ...answers, sgEpInitialApplication: undefined }).status).toBe("profile-incomplete");
+  });
+
+  it.each([
+    [true, "conditions-met"],
+    [false, "conditions-not-applicable"],
+    [undefined, "profile-incomplete"],
+  ])("requires ordinary pass confirmation before checking a 124-day renewal or exemption (%s)", (ordinary, status) => {
+    const result = evaluate({
+      ...zeroPoints,
+      sgEpInitialApplication: false,
+      sgEpRenewalOrdinary: ordinary,
+      sgEpRenewalExpiryDate: "2027-03-31",
+      sgEpFixedMonthlySalarySgd: 22_500,
+    });
+    expect(result.status).toBe(status);
+    expect(result.checks.some(({ condition }) => condition.id === "sg-ep-renewal-window-opened")).toBe(ordinary === true);
+    expect(result.scores).toHaveLength(ordinary === true ? 1 : 0);
+  });
+
+  it.each([false, undefined])("reports the deadline exclusion for sponsorship or an unknown type (%s)", (ordinary) => {
+    const result = evaluate({
+      sgEpInitialApplication: false,
+      sgEpRenewalOrdinary: ordinary,
+      sgEpRenewalExpiryDate: asOf,
+      sgEpFixedMonthlySalarySgd: 22_500,
+    });
+    expect(result).toMatchObject({ status: "conditions-not-applicable", scores: [] });
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "sg-ep-renewal-before-deadline" }), status: "fail",
+    }));
   });
 
   it("records separate MOM dates for new applications and existing passes", () => {

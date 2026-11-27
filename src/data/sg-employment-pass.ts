@@ -1,6 +1,8 @@
 import type { Condition, Policy, RuleExpression, RuleSource } from "@/domain/policy";
 import { sgEpCompassPolicy } from "./sg-ep-compass";
-import { renewalDeadline, renewalWindowOpened, sgEpRenewalUrl } from "./sg-ep-renewal-window";
+import {
+  ordinaryRenewal, renewalDeadline, renewalDeadlineReached, renewalWindowOpened, sgEpRenewalUrl,
+} from "./sg-ep-renewal-window";
 
 const momEligibility = "https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility";
 const momKeyFacts = "https://www.mom.gov.sg/passes-and-permits/employment-pass/key-facts";
@@ -213,12 +215,12 @@ const renewalDateConditions: readonly Condition[] = [
 
 const renewalPolicy: Policy = {
   id: "sg-ep-stage-1-renewal",
-  version: "2026-11-26.2",
+  version: "2026-11-27.1",
   stage: "application",
   name: { en: "Employment Pass renewal salary check", zh: "就业准证续签薪资核对" },
   scope: {
-    en: "Checks the ordinary renewal window using today’s Singapore date and the Stage 1 salary using the current pass expiry date. The employer still needs to confirm special provisions, including the EP (Sponsorship) window, and other requirements.",
-    zh: "按新加坡当地核对日判断普通续签窗口，并按现有准证到期日选用第一阶段薪资表。担保类准证的递交窗口等特殊安排及其他续签要求仍需雇主核实。",
+    en: "Checks the deadline for all renewals. The opening window and Stage 1 salary checks require confirmation that the current pass is an ordinary EP. Confirm the separate EP (Sponsorship) procedure with MOM.",
+    zh: "截止日期适用于所有续签类型。续签开放日期和第一阶段薪资核对须先确认持有普通就业准证。持担保类准证时，请向新加坡人力部核实另行适用的续签流程。",
   },
   conditions: [
     {
@@ -240,12 +242,27 @@ const renewalPolicy: Policy = {
       source: renewalScopeSource,
     },
     renewalDeadline,
+    renewalDeadlineReached,
+    ordinaryRenewal,
     renewalWindowOpened,
     ...renewalDateConditions,
   ],
   expression: {
     kind: "when",
-    test: { kind: "condition", conditionId: "sg-ep-is-renewal" },
+    test: {
+      kind: "all",
+      children: [
+        { kind: "condition", conditionId: "sg-ep-is-renewal" },
+        {
+          kind: "any",
+          // Apply an already missed deadline even when the pass type is not known or covered.
+          children: [
+            { kind: "condition", conditionId: ordinaryRenewal.id },
+            { kind: "condition", conditionId: renewalDeadlineReached.id },
+          ],
+        },
+      ],
+    },
     requirement: {
       kind: "all",
       children: [

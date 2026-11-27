@@ -13,7 +13,7 @@ const timingSource: RuleSource = {
     zh: "新加坡人力部规定须在到期日前递交续签，错过截止日期须重新申请准证。人力部的续签日期计算器按普通就业准证到期前 180 天开放。担保类就业准证另有三个月的开放窗口。",
   },
   effectiveFrom: null,
-  lastVerifiedAt: "2026-11-26T23:59:03Z",
+  lastVerifiedAt: "2026-11-27T06:03:45Z",
   reviewStatus: "verified",
 };
 
@@ -26,6 +26,29 @@ export const renewalDeadline = {
   nextStep: {
     en: "Enter the expiry date from the existing pass. If it is today or earlier, ask your employer to apply for a new pass.",
     zh: "请填写现有准证上的到期日。如果今天已到期或超过到期日，请雇主重新申请准证。",
+  },
+  source: timingSource,
+} satisfies Condition;
+
+export const renewalDeadlineReached = {
+  id: "sg-ep-renewal-deadline-reached",
+  input: renewalDeadline.input,
+  operator: "lte",
+  expected: 0,
+  label: { en: "The pass expires today or has already expired", zh: "准证今天到期或已过期" },
+  nextStep: renewalDeadline.nextStep,
+  source: timingSource,
+} satisfies Condition;
+
+export const ordinaryRenewal = {
+  id: "sg-ep-ordinary-renewal",
+  input: "answer:sgEpRenewalOrdinary",
+  operator: "eq",
+  expected: true,
+  label: { en: "The current pass is an ordinary Employment Pass", zh: "现有准证为普通就业准证" },
+  nextStep: {
+    en: "Confirm the pass type with the employer. For EP (Sponsorship), ask the sponsor to verify the separate three-month renewal window with MOM.",
+    zh: "请与雇主核实现有准证类型。持担保类就业准证时，请由担保方与新加坡人力部核实另行适用的三个月续签窗口。",
   },
   source: timingSource,
 } satisfies Condition;

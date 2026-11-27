@@ -1,5 +1,5 @@
 import type { Condition, Localized, Policy, RuleExpression, RuleSource, ScoreCategory } from "../domain/policy";
-import { renewalDeadline, renewalWindowOpened, sgEpRenewalUrl } from "./sg-ep-renewal-window";
+import { ordinaryRenewal, renewalDeadline, renewalWindowOpened, sgEpRenewalUrl } from "./sg-ep-renewal-window";
 
 const momEligibility = "https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility";
 const compassAnnouncement = "https://www.mom.gov.sg/newsroom/press-releases/2023/0329-details-on-compass-bonus-criteria";
@@ -192,14 +192,16 @@ const condition = (conditionId: string): RuleExpression => ({ kind: "condition",
 
 export const sgEpCompassPolicy: Policy = {
   id: "sg-ep-stage-2-compass",
-  version: "2026-11-26.2",
+  version: "2026-11-27.1",
   stage: "application",
   name: { en: "COMPASS points or exemption check", zh: "COMPASS 积分或豁免核对" },
   scope: {
-    en: "Checks Stage 2 exemptions or the 40-point requirement from employer-confirmed scores. For an existing pass, the check applies during the ordinary renewal window. The qualifying salary, evidence, employer obligations and full Employment Pass eligibility are checked separately.",
-    zh: "根据雇主已核实的积分和豁免依据，核对是否满足第二阶段的豁免或 40 分要求。现有准证在普通续签开放期间适用。第一阶段薪资、证明材料、雇主义务及就业准证完整资格须另行核对。",
+    en: "Checks Stage 2 exemptions or the 40-point requirement from employer-confirmed scores. For an existing pass, the check applies during the renewal window for confirmed ordinary EPs. The qualifying salary, evidence, employer obligations and full Employment Pass eligibility are checked separately.",
+    zh: "根据雇主已核实的积分和豁免依据，核对是否满足第二阶段的豁免或 40 分要求。已确认的普通就业准证在续签窗口开放期间适用。第一阶段薪资、证明材料、雇主义务及就业准证完整资格须另行核对。",
   },
-  conditions: [...compassScope, renewalDeadline, renewalWindowOpened, ...sgEpCompassExemptions, ...tierConditions],
+  conditions: [
+    ...compassScope, ordinaryRenewal, renewalDeadline, renewalWindowOpened, ...sgEpCompassExemptions, ...tierConditions,
+  ],
   expression: {
     kind: "when",
     test: {
@@ -210,8 +212,12 @@ export const sgEpCompassPolicy: Policy = {
           kind: "when",
           test: condition("sg-ep-compass-renewal"),
           requirement: {
-            kind: "all",
-            children: [condition(renewalDeadline.id), condition(renewalWindowOpened.id)],
+            kind: "when",
+            test: {
+              kind: "all",
+              children: [condition(renewalDeadline.id), condition(ordinaryRenewal.id)],
+            },
+            requirement: condition(renewalWindowOpened.id),
           },
         },
       ],

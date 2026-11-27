@@ -1,7 +1,7 @@
 // Run the test server on the fixture's policy date while allowing time to advance.
 const { readFileSync } = process.getBuiltinModule("node:fs");
 const realDate = Date;
-const offset = realDate.parse("2026-11-26T12:00:00Z") - realDate.now();
+const offset = realDate.parse("2026-11-27T12:00:00Z") - realDate.now();
 const fixtureNow = () => realDate.now() + offset;
 
 function assessmentNow() {

@@ -115,6 +115,7 @@ describe("Singapore Employment Pass renewal salary", () => {
   function evaluateRenewal(answers: Profile["answers"], asOf = "2027-12-01") {
     return evaluatePolicy(renewal, prepareMatchingProfile(profile({
       sgEpInitialApplication: false,
+      sgEpRenewalOrdinary: true,
       sgEpRenewalSameEmployerRole: true,
       ...answers,
     }), asOf), asOf);
@@ -174,6 +175,29 @@ describe("Singapore Employment Pass renewal salary", () => {
     ["2027-05-27", "conditions-not-met"],
   ])("uses the 180-day filing window for a pass expiring on %s", (expiry, status) => {
     expect(evaluateRenewal({ sgEpRenewalExpiryDate: expiry }, "2026-11-27").status).toBe(status);
+  });
+
+  it.each([
+    [true, "conditions-met"],
+    [false, "conditions-not-applicable"],
+    [undefined, "profile-incomplete"],
+  ])("checks the 124-day window only when the current pass is confirmed ordinary (%s)", (ordinary, status) => {
+    const result = evaluateRenewal({
+      sgEpRenewalOrdinary: ordinary,
+      sgEpRenewalExpiryDate: "2027-03-31",
+      sgEpFixedMonthlySalarySgd: 22_500,
+    }, "2026-11-27");
+    expect(result.status).toBe(status);
+    expect(result.checks.some(({ condition }) => condition.id === "sg-ep-renewal-window-opened")).toBe(ordinary === true);
+    expect(result.thresholds).toHaveLength(ordinary === true ? 1 : 0);
+  });
+
+  it.each([false, undefined])("enforces the expiry-date deadline even without confirmed ordinary status (%s)", (ordinary) => {
+    const result = evaluateRenewal({ sgEpRenewalOrdinary: ordinary, sgEpRenewalExpiryDate: "2026-11-27" }, "2026-11-27");
+    expect(result).toMatchObject({ status: "conditions-not-met", thresholds: [] });
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "sg-ep-renewal-before-deadline" }), status: "fail",
+    }));
   });
 
   it("distinguishes missing employer answers from a confirmed employer or salary gap", () => {

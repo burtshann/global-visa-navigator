@@ -340,6 +340,7 @@ test("checks a Singapore renewal and unknown COMPASS points in both languages on
     await page.getByLabel("Main goal").selectOption("skilled-work");
     const answer = (name: string) => page.locator(`#question-sg-employment-pass-${name}`);
     await answer("sgEpInitialApplication").selectOption("no");
+    await answer("sgEpRenewalOrdinary").selectOption("yes");
     await expect(answer("sgEpSingaporeJobOffer")).toHaveCount(0);
     await answer("sgEpRenewalExpiryDate").fill("2028-01-01");
     await answer("sgEpRenewalSameEmployerRole").selectOption("yes");
@@ -390,6 +391,7 @@ test("stops a renewal on its expiry date at Singapore midnight", async ({ page }
     await page.getByLabel("Main goal").selectOption("skilled-work");
     const answer = sgEpAnswers(page);
     await answer("sgEpInitialApplication").selectOption("no");
+    await answer("sgEpRenewalOrdinary").selectOption("yes");
     await answer("sgEpRenewalExpiryDate").fill("2026-12-02");
     await answer("sgEpRenewalSameEmployerRole").selectOption("yes");
     await answer("sgEpAge").fill("30");
@@ -497,6 +499,7 @@ test("requires new COMPASS confirmations when the C1 expiry edition or applicati
     await page.getByLabel("Main goal").selectOption("skilled-work");
     const answer = sgEpAnswers(page);
     await answer("sgEpInitialApplication").selectOption("no");
+    await answer("sgEpRenewalOrdinary").selectOption("yes");
     await answer("sgEpRenewalExpiryDate").fill("2027-06-30");
     await answer("sgEpRenewalSameEmployerRole").selectOption("yes");
     await answer("sgEpAge").fill("30");
@@ -524,4 +527,79 @@ test("requires new COMPASS confirmations when the C1 expiry edition or applicati
   } finally {
     await rm(serverClock, { force: true });
   }
+});
+
+test("requires the ordinary pass type for the 180-day renewal window", async ({ page }) => {
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-work");
+  const answer = sgEpAnswers(page);
+  await answer("sgEpInitialApplication").selectOption("no");
+  await answer("sgEpRenewalExpiryDate").fill("2027-03-31");
+  await answer("sgEpRenewalSameEmployerRole").selectOption("yes");
+  await answer("sgEpAge").fill("30");
+  await answer("sgEpFinancialSector").selectOption("no");
+  await answer("sgEpFixedMonthlySalarySgd").fill("22500");
+
+  const type = page.getByLabel("Which type of Employment Pass do you currently hold?");
+  const results = await checkProfile(page);
+  const firstMatch = results.locator(".match-card").first();
+  const pathway = results.locator('[data-route-id="sg-employment-pass"]');
+  const salary = pathway.locator('[data-policy-id="sg-ep-stage-1-renewal"]');
+  const compass = pathway.locator('[data-policy-id="sg-ep-stage-2-compass"]');
+  const passed = pathway.getByText("All checked conditions met", { exact: true });
+  const renewalWindow = pathway.getByText(/ordinary EP renewal window has opened/);
+
+  await expect(pathway.locator("time")).toHaveText("2026-11-27");
+  await expect(type).toHaveValue("");
+  await expect(salary.getByText("More information needed", { exact: true })).toBeVisible();
+  await expect(compass.getByText("More information needed", { exact: true })).toBeVisible();
+  await expect(renewalWindow).toHaveCount(0);
+  await expect(firstMatch).toHaveAttribute("data-route-id", "uk-skilled-worker");
+
+  await type.selectOption("yes");
+  await enterCompassForty(page);
+  await answer("sgEpCompassShortRole").selectOption("yes");
+  await checkProfile(page);
+  await expect(passed).toHaveCount(2);
+  await expect(firstMatch).toHaveAttribute("data-route-id", "sg-employment-pass");
+
+  await type.selectOption("no");
+  await expect(answer("sgEpCompassC2")).toHaveValue("");
+  await expect(answer("sgEpCompassShortRole")).toHaveValue("");
+  await checkProfile(page);
+  await expect(pathway.getByText(/separate three-month renewal window/)).toBeVisible();
+  await expect(pathway.locator('[data-stage-id="qualifying-salary"]')).toContainText("No published check covers this stage");
+  await expect(renewalWindow).toHaveCount(0);
+  await expect(passed).toHaveCount(0);
+  await expect(firstMatch).toHaveAttribute("data-route-id", "uk-skilled-worker");
+
+  const snapshots = ["sg-ep-stage-1-renewal", "sg-ep-stage-2-compass"];
+  for (const present of snapshots) {
+    await page.route("**/api/assessment", async (route) => {
+      const live = await route.fetch();
+      const metadata = await live.json();
+      const epPolicies = metadata.policies["sg-employment-pass"].policies as { id: string }[];
+      metadata.policies["sg-employment-pass"].policies = epPolicies.filter(({ id }) => id === present);
+      await route.fulfill({ response: live, json: metadata });
+    });
+    await checkProfile(page);
+    await expect(type).toHaveValue("no");
+    await expect(passed).toHaveCount(0);
+    await expect(renewalWindow).toHaveCount(0);
+    await expect(firstMatch).toHaveAttribute("data-route-id", "uk-skilled-worker");
+
+    await type.selectOption("yes");
+    await checkProfile(page);
+    await expect(passed).toHaveCount(1);
+    await expect(firstMatch).toHaveAttribute("data-route-id", "uk-skilled-worker");
+    await type.selectOption("no");
+    await page.unroute("**/api/assessment");
+  }
+
+  await answer("sgEpRenewalExpiryDate").fill("2026-11-27");
+  await checkProfile(page);
+  await expect(salary.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(salary.getByText(/ask your employer to apply for a new pass/)).toBeVisible();
+  await expect(compass.getByText("These checks do not apply", { exact: true })).toBeVisible();
+  await expect(passed).toHaveCount(0);
 });

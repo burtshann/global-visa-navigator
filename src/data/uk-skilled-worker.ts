@@ -1,4 +1,6 @@
-import type { Localized, Policy } from "../domain/policy";
+import type { Condition, Localized, Policy } from "../domain/policy";
+import { generalSalary, goingRate, hourlySalary, optionA, table1Occupation } from "./uk-skilled-worker-standard";
+import { ukSwitchChecks, ukSwitchConditions } from "./uk-skilled-worker-switch";
 
 const t = (en: string, zh: string): Localized => ({ en, zh });
 
@@ -18,14 +20,78 @@ const visaBrakeSource = {
   reviewStatus: "verified",
 } as const;
 
+const validityRules = appendix + "#validity-requirements-for-a-skilled-worker";
+const verification = { lastVerifiedAt: "2026-11-27T12:04:43Z", reviewStatus: "verified" } as const;
+const cosSource = { ...originalSource, ...verification, url: sponsorshipRules };
+const certificateChecks = [
+  {
+    id: "uk-sw-cos-issue-window",
+    input: "answer:ukSkilledCosIssueInWindow",
+    operator: "eq",
+    expected: true,
+    label: t("CoS issued within the applicable submission window", "担保证明在适用的递交期限内签发"),
+    nextStep: t("Confirm the issue date and the period that applies to this CoS with your sponsor before you submit.", "请在递交前向雇主核实担保证明的签发日和适用期限。"),
+    source: {
+      ...verification,
+      url: validityRules,
+      effectiveFrom: "2025-04-09",
+      effectiveDateUrl: "https://www.gov.uk/government/publications/statement-of-changes-to-the-immigration-rules-hc-733-12-march-2025/statement-of-changes-to-the-immigration-rules-hc-733-12-march-2025-accessible-version",
+      applicableWhen: t("CoS issue timing under SW 1.2(d), including the Sponsor a Worker version.", "适用 SW 1.2(d) 的担保证明签发时限，包括 Sponsor a Worker 系统适用的时限。"),
+      evidence: t("Normally the CoS must have been issued no more than three months before application. An SRN-linked CoS uses 90 days, excluding days spent reviewing sponsor-requested edits.", "通常须在申请日前三个月内签发。关联担保参考编号（SRN）的证书适用 90 天，扣除雇主请求的修改处于审核中的天数。"),
+    },
+  },
+  {
+    id: "uk-sw-cos-start-window",
+    input: "answer:ukSkilledCosStartInWindow",
+    operator: "eq",
+    expected: true,
+    label: t("The CoS start date falls no more than three months after applying", "担保证明注明的入职日不晚于申请日后三个月"),
+    nextStep: t("Compare your planned submission date with the start date on the CoS and ask your sponsor to confirm.", "请将计划递交日与担保证明上的入职日期比对，并请雇主确认。"),
+    source: {
+      ...cosSource,
+      applicableWhen: t("CoS start date under SW 5.1(c).", "适用 SW 5.1(c) 的担保证明入职日期。"),
+      evidence: t("The sponsor must state a start date no more than three months after the date of application.", "雇主必须注明入职日，且该日期不得晚于申请日后三个月。"),
+    },
+  },
+  {
+    id: "uk-sw-cos-usable",
+    input: "answer:ukSkilledCosUsable",
+    operator: "eq",
+    expected: true,
+    label: t("The CoS remains usable for this application", "担保证明仍可用于本次申请"),
+    nextStep: t("Check with your sponsor for withdrawal, cancellation or previous use in a granted or refused application.", "请向雇主核实担保证明是否已撤回、取消，或已用于获批或被拒的申请。"),
+    source: {
+      ...cosSource,
+      applicableWhen: t("Previous use and current status under SW 5.1(d)–(e).", "适用 SW 5.1(d) 至 (e) 的既往使用和当前状态。"),
+      evidence: t("A CoS must not be withdrawn or cancelled, or already used for a grant or refusal. Earlier invalid, void or withdrawn applications are exceptions to the reuse restriction.", "证明不得已被撤回或取消，也不得已用于获批或被拒的申请。因无效退回、作废或撤回的既往申请不受该重复使用限制。"),
+    },
+  },
+  {
+    id: "uk-sw-atas",
+    input: "answer:ukSkilledAtasBasis",
+    operator: "in",
+    expected: ["not-required", "valid"],
+    label: t("CoS confirms the ATAS requirement, with a valid certificate if needed", "担保证明已说明是否需要 ATAS，如需要则持有有效证书"),
+    nextStep: t("Ask the sponsor whether ATAS applies and obtain a valid ATAS certificate if required.", "请雇主确认是否适用 ATAS。如适用，请取得有效证书。"),
+    source: {
+      ...verification,
+      url: sponsorshipRules,
+      effectiveFrom: "2021-05-21",
+      effectiveDateUrl: "https://www.gov.uk/government/publications/skilled-worker-visa-caseworker-guidance/skilled-worker-caseworker-guidance-accessible",
+      applicableWhen: t("CoS confirmation under SW 5.1(f) and applicable ATAS evidence under SW 6.3A.", "适用 SW 5.1(f) 的担保确认及 SW 6.3A 的 ATAS 证明。"),
+      evidence: t("The sponsor confirms whether ATAS applies. From 21 May 2021 the applicant must provide a valid certificate where the Appendix ATAS criteria apply.", "雇主须确认是否适用 ATAS。自 2021 年 5 月 21 日起，申请人符合《ATAS 附录》所列条件时须提供有效证书。"),
+    },
+  },
+] satisfies readonly Condition[];
+
 export const ukSkilledWorkerPolicy: Policy = {
   id: "uk-skilled-worker-initial",
-  version: "2026-11-26.1",
+  version: "2026-11-27.2",
   stage: "application",
   name: t("First Skilled Worker application", "首次申请技术工人签证"),
   scope: t(
-    "This check covers the nationality restriction for entry clearance, age, a job-specific Certificate of Sponsorship, the sponsor’s rating and authorisation, and English evidence for a first-time main applicant. Job codes, salary, maintenance, suitability and full CoS validity still need review. Dependants, extensions and changes to existing Skilled Worker permission are outside this check.",
-    "本核查适用于首次申请的主申请人，涵盖入境许可的国籍限制、年龄、针对该岗位的担保证明、担保方评级及资质和英语证明。职业代码、薪资、生活费、适格性及担保证明的完整有效性仍须核实。家属、续签及变更现有技术工人许可不在核查范围内。",
+    "Checks selected general conditions for first principal applications, including in-country switching. Salary is checked for standard Option A jobs in Table 1. Other salary options, transition rules, variable hours, maintenance and full eligibility need separate review.",
+    "适用于首次申请的主申请人，核对部分通用条件，包括境内转换。薪资核对覆盖表 1 岗位的标准选项 A。其他薪资选项、过渡安排、变动工时、生活费及完整资格须另行核实。",
   ),
   conditions: [
     {
@@ -89,10 +155,9 @@ export const ukSkilledWorkerPolicy: Policy = {
       label: t("Certificate of Sponsorship assigned for your specific offered job", "已获得针对获聘岗位签发的担保证明"),
       nextStep: t("Ask your employer for the Certificate of Sponsorship covering the role. If applying from outside the UK, confirm they assigned a Defined CoS.", "请雇主提供对应岗位的担保证明。如在英国境外申请，请确认雇主已签发指定担保证明（Defined CoS）。"),
       source: {
-        ...originalSource,
-        url: sponsorshipRules,
+        ...cosSource,
         applicableWhen: t("Job-specific sponsorship evidence requirements, SW 5.1(a)–(b).", "针对具体岗位的担保证明要求，SW 5.1(a)–(b)。"),
-        evidence: t("A CoS must cover the offered role and salary. For entry clearance, it must be allocated to the sponsor for those particular details. Document validity is a separate check.", "担保证明须对应获聘岗位及薪资。申请入境许可时，英国内政部须按该岗位及薪资资料为担保方分配证明。证书有效性仍须另行核实。"),
+        evidence: t("A CoS identifies the applicant, Skilled Worker sponsorship, the offered job and pay, and PAYE details when required. For entry clearance, the Home Office must allocate the CoS for that specific job and salary.", "担保证明须载明申请人、技术工人担保类别、岗位及薪资，并在适用时包含 PAYE 信息。申请入境许可时，英国内政部须按该岗位和薪资为雇主分配证明。"),
       },
     },
     {
@@ -123,6 +188,12 @@ export const ukSkilledWorkerPolicy: Policy = {
         evidence: t("The required level is B2. A test-based claim under EL 6.1 needs a valid approved test reference covering all four skills within two years before applying. Other evidence can satisfy the requirement under the relevant Appendix English Language provisions.", "要求等级为 B2。按 EL 6.1 以考试证明时，须提供在申请日前两年内获得的认可考试有效参考编号，并符合四项能力要求。其他证明可按《英语语言附录》相应条款认定。"),
       },
     },
+    ...certificateChecks,
+    ...ukSwitchConditions,
+    optionA,
+    table1Occupation,
+    generalSalary,
+    hourlySalary,
   ],
   expression: {
     kind: "when",
@@ -135,10 +206,31 @@ export const ukSkilledWorkerPolicy: Policy = {
           test: { kind: "condition", conditionId: "uk-sw-entry-clearance" },
           requirement: { kind: "condition", conditionId: "uk-sw-entry-nationality" },
         },
+        ukSwitchChecks,
         { kind: "condition", conditionId: "uk-sw-age" },
         { kind: "condition", conditionId: "uk-sw-job-cos" },
         { kind: "condition", conditionId: "uk-sw-sponsor" },
         { kind: "condition", conditionId: "uk-sw-english" },
+        ...certificateChecks.map(({ id }) => ({ kind: "condition" as const, conditionId: id })),
+        {
+          kind: "when",
+          otherwise: "unknown",
+          test: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: optionA.id },
+              { kind: "condition", conditionId: table1Occupation.id },
+            ],
+          },
+          requirement: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: generalSalary.id },
+              { kind: "condition", conditionId: hourlySalary.id },
+              goingRate,
+            ],
+          },
+        },
       ],
     },
   },

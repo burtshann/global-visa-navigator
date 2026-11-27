@@ -70,6 +70,11 @@ export const copy = {
   goToDirectory: { en: "Browse the visa directory", zh: "浏览签证目录" },
   alignment: { en: "Goal relevance", zh: "目标相关性" },
   checkedOutcome: { en: "Checked conditions", zh: "已核对条件" },
+  ukSponsorContext: {
+    en: "Use evidence for this application. If the sponsor, CoS or planned filing date changes, clear and reconfirm these answers.",
+    zh: "请使用本次申请的资料。如雇主、担保证明或计划递交日变更，请清除并重新确认这些答案。",
+  },
+  clearUkSponsor: { en: "Clear UK sponsor confirmations", zh: "清除英国担保确认" },
   fullEligibility: { en: "Full eligibility", zh: "完整资格" },
   fullEligibilityUnverified: { en: "Full eligibility still needs review", zh: "完整资格仍待核实" },
   goalAligned: { en: "Matches your goal", zh: "符合你的目标" },

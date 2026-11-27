@@ -71,6 +71,7 @@ export const routes: readonly Route[] = [
   },
   {
     id: "uk-skilled-worker", countryId: "GB", category: "skilled-work",
+    policyTimeZone: "Europe/London",
     name: { en: "Skilled Worker visa", zh: "Skilled Worker 技术工作签证" },
     description: { en: "A sponsored employment route for an eligible job in the UK.", zh: "面向在英国从事符合要求岗位的雇主担保工作路径。" },
     officialUrl: "https://www.gov.uk/skilled-worker-visa",

@@ -10,6 +10,8 @@ import { copy } from "./navigator-copy";
 import { OfficialLink, PolicyDetails, PolicyStatus, routePolicies, type Language } from "./policy-result";
 import { getRuleQuestionGroups, readProfile, RuleQuestions, type ProfileDraft } from "./profile-questions";
 
+import { clearUkSponsorConfirmations, ukAssessmentContext, updateProfileDraft } from "./uk-skilled-worker-draft";
+
 type CheckedPolicy = ReturnType<typeof evaluatePathway> & { policy: Policy };
 
 const priority: Record<Evaluation["status"], number> = {
@@ -84,6 +86,7 @@ export function VisaNavigator({ directory, initialAssessment }: {
 
   const resultsTitle = useRef<HTMLHeadingElement>(null);
   const assessmentRequest = useRef<AbortController | null>(null);
+  const lastUkContext = useRef(ukAssessmentContext(initialAssessment));
   const { asOf, localDates } = assessment;
   const lastAvailableRoutes = assessmentRoutes(directory, assessment);
   const routes = assessment.availability === "unavailable" ? directory : lastAvailableRoutes;
@@ -115,8 +118,20 @@ export function VisaNavigator({ directory, initialAssessment }: {
     document.documentElement.lang = nextLanguage === "zh" ? "zh-Hans" : "en";
   }
 
+  function invalidateCheckedProfile() {
+    assessmentRequest.current?.abort();
+    setCheckedProfile(null);
+    setFormMessage(null);
+  }
+
   function updateDraft(input: string, value: string) {
-    setDraft((previous) => ({ ...previous, [input]: value }));
+    if (assessmentRequest.current || input.startsWith("answer:ukSkilled")) invalidateCheckedProfile();
+    setDraft((previous) => updateProfileDraft(previous, input, value));
+  }
+
+  function resetUkSponsorConfirmations() {
+    invalidateCheckedProfile();
+    setDraft(clearUkSponsorConfirmations);
   }
 
   async function checkProfile(event: FormEvent<HTMLFormElement>) {
@@ -133,8 +148,15 @@ export function VisaNavigator({ directory, initialAssessment }: {
       if (request.signal.aborted) return;
       if (current.availability !== "available") throw new Error("Policy refresh failed.");
       const currentQuestions = getRuleQuestionGroups(assessmentRoutes(directory, current));
+      const currentUkContext = ukAssessmentContext(current);
+      const last = lastUkContext.current;
+      const ukContextChanged = currentUkContext.date !== last.date ||
+        (currentUkContext.version !== undefined && last.version !== undefined && currentUkContext.version !== last.version);
+      lastUkContext.current = { ...currentUkContext, version: currentUkContext.version ?? last.version };
+      const currentDraft = ukContextChanged ? clearUkSponsorConfirmations(draft) : draft;
+      setDraft(currentDraft);
       setAssessment(current);
-      setCheckedProfile(prepareMatchingProfile(readProfile(draft, currentQuestions)));
+      setCheckedProfile(prepareMatchingProfile(readProfile(currentDraft, currentQuestions)));
       setFormMessage("checked");
     } catch {
       if (!request.signal.aborted) {
@@ -248,7 +270,7 @@ export function VisaNavigator({ directory, initialAssessment }: {
                   {categories.map(([category, label]) => <option key={category} value={category}>{label[language]}</option>)}
                 </select>
               </label>
-              <RuleQuestions groups={questions} language={language} draft={draft} onChange={updateDraft} />
+              <RuleQuestions groups={questions} language={language} draft={draft} onChange={updateDraft} onResetUkSponsor={resetUkSponsorConfirmations} />
               <div className="form-actions">
                 <button className="button button--primary" type="submit" disabled={formMessage === "checking"}>{t("check")} <span aria-hidden="true">→</span></button>
                 <button className="button button--outline" type="reset">{t("clear")}</button>

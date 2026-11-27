@@ -19,6 +19,7 @@ export type Route = Readonly<{
   policies?: readonly Policy[];
   scope?: Localized;
   policyTimeZone?: string;
+  requiredPolicyGroups?: readonly { id: string; name: Localized; policyIds: readonly string[] }[];
 }>;
 
 export const routes: readonly Route[] = [
@@ -143,6 +144,18 @@ export const routes: readonly Route[] = [
     description: { en: "Singapore's work pass for foreign professionals, managers and executives.", zh: "新加坡面向外籍专业人员、管理人员及高管的工作准证。" },
     officialUrl: "https://www.mom.gov.sg/passes-and-permits/employment-pass",
     policies: sgEmploymentPassPolicies,
+    requiredPolicyGroups: [
+      {
+        id: "qualifying-salary",
+        name: { en: "Stage 1 · Qualifying salary", zh: "第一阶段 · 最低薪资" },
+        policyIds: ["sg-ep-stage-1-2025", "sg-ep-stage-1-2027", "sg-ep-stage-1-renewal"],
+      },
+      {
+        id: "compass",
+        name: { en: "Stage 2 · COMPASS or exemption", zh: "第二阶段 · COMPASS 或豁免" },
+        policyIds: ["sg-ep-stage-2-compass"],
+      },
+    ],
   },
   {
     id: "sg-student", countryId: "SG", category: "study",

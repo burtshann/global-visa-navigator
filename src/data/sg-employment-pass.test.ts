@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { evaluatePolicy, policyInputs, type Profile } from "../domain/policy";
 import { snapshotDigest } from "../server/policy-snapshots";
+import { prepareMatchingProfile } from "./matching-profile";
 import { sgEmploymentPassPolicies } from "./sg-employment-pass";
 
-const [current, future] = sgEmploymentPassPolicies;
+const [current, future, renewal] = sgEmploymentPassPolicies;
 const currentAsOf = "2026-12-31";
 const futureAsOf = "2027-01-01";
 const defaultAnswers: Profile["answers"] = {
@@ -107,5 +108,107 @@ describe("Singapore Employment Pass Stage 1 salary", () => {
     };
     expect(snapshotDigest(modifiedPolicy)).not.toBe(snapshotDigest(current));
     expect(evaluatePolicy({ ...current, expression: { ...table, categories: [] } }, profile(), currentAsOf).status).toBe("rules-not-covered");
+  });
+});
+
+describe("Singapore Employment Pass renewal salary", () => {
+  function evaluateRenewal(answers: Profile["answers"], asOf = "2027-12-01") {
+    return evaluatePolicy(renewal, prepareMatchingProfile(profile({
+      sgEpInitialApplication: false,
+      sgEpRenewalOrdinary: true,
+      sgEpRenewalSameEmployerRole: true,
+      ...answers,
+    }), asOf), asOf);
+  }
+
+  it.each([
+    ["2027-12-15", 23, false, 5_600],
+    ["2027-12-31", 30, false, 7_223],
+    ["2028-01-01", 30, false, 7_750],
+    ["2027-12-31", 30, true, 7_982],
+    ["2028-01-01", 30, true, 8_541],
+    ["2028-02-29", 45, true, 12_700],
+  ])("uses the published table for expiry %s, age %d, financial sector %s", (expiry, age, financial, minimum) => {
+    const answers = { sgEpRenewalExpiryDate: expiry, sgEpAge: age, sgEpFinancialSector: financial };
+    expect(evaluateRenewal({ ...answers, sgEpFixedMonthlySalarySgd: minimum })).toMatchObject({
+      status: "conditions-met",
+      thresholds: [{ minimum, status: "pass" }],
+    });
+    expect(evaluateRenewal({ ...answers, sgEpFixedMonthlySalarySgd: minimum - 0.01 })).toMatchObject({
+      status: "conditions-not-met",
+      thresholds: [{ minimum, status: "fail" }],
+    });
+  });
+
+  it("keeps the same salary cutoff before and after the new-application switch", () => {
+    const answers = { sgEpRenewalExpiryDate: "2027-06-27" };
+    for (const asOf of ["2026-12-31", "2027-01-01"]) {
+      expect(evaluateRenewal(answers, asOf)).toMatchObject({
+        status: "conditions-met", thresholds: [{ minimum: 7_223 }],
+      });
+    }
+  });
+
+  it.each([undefined, "2028-02-30", "2028-2-01", 20280101])("leaves a missing or invalid expiry (%s) unresolved", (expiry) => {
+    expect(evaluateRenewal({ sgEpRenewalExpiryDate: expiry })).toMatchObject({
+      status: "profile-incomplete", thresholds: [],
+    });
+  });
+
+  it("does not apply the renewal schedule to first applications", () => {
+    expect(evaluateRenewal({ sgEpInitialApplication: true })).toMatchObject({
+      status: "conditions-not-applicable", thresholds: [],
+    });
+  });
+
+  it.each(["2025-12-31", "2026-10-01", "2026-11-27"])("rejects renewals where the pass expiry %s is today or in the past", (expiry) => {
+    const result = evaluateRenewal({ sgEpRenewalExpiryDate: expiry, sgEpFixedMonthlySalarySgd: 22_500 }, "2026-11-27");
+    expect(result).toMatchObject({ status: "conditions-not-met", thresholds: [] });
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "sg-ep-renewal-before-deadline" }), status: "fail",
+    }));
+  });
+
+  it.each([
+    ["2026-11-28", "conditions-met"],
+    ["2027-05-26", "conditions-met"],
+    ["2027-05-27", "conditions-not-met"],
+  ])("uses the 180-day filing window for a pass expiring on %s", (expiry, status) => {
+    expect(evaluateRenewal({ sgEpRenewalExpiryDate: expiry }, "2026-11-27").status).toBe(status);
+  });
+
+  it.each([
+    [true, "conditions-met"],
+    [false, "conditions-not-applicable"],
+    [undefined, "profile-incomplete"],
+  ])("checks the 124-day window only when the current pass is confirmed ordinary (%s)", (ordinary, status) => {
+    const result = evaluateRenewal({
+      sgEpRenewalOrdinary: ordinary,
+      sgEpRenewalExpiryDate: "2027-03-31",
+      sgEpFixedMonthlySalarySgd: 22_500,
+    }, "2026-11-27");
+    expect(result.status).toBe(status);
+    expect(result.checks.some(({ condition }) => condition.id === "sg-ep-renewal-window-opened")).toBe(ordinary === true);
+    expect(result.thresholds).toHaveLength(ordinary === true ? 1 : 0);
+  });
+
+  it.each([false, undefined])("enforces the expiry-date deadline even without confirmed ordinary status (%s)", (ordinary) => {
+    const result = evaluateRenewal({ sgEpRenewalOrdinary: ordinary, sgEpRenewalExpiryDate: "2026-11-27" }, "2026-11-27");
+    expect(result).toMatchObject({ status: "conditions-not-met", thresholds: [] });
+    expect(result.checks).toContainEqual(expect.objectContaining({
+      condition: expect.objectContaining({ id: "sg-ep-renewal-before-deadline" }), status: "fail",
+    }));
+  });
+
+  it("distinguishes missing employer answers from a confirmed employer or salary gap", () => {
+    const answers = { sgEpRenewalExpiryDate: "2027-12-31" };
+    for (const overrides of [
+      { sgEpRenewalSameEmployerRole: undefined },
+      { sgEpFinancialSector: undefined },
+      { sgEpFixedMonthlySalarySgd: 7_223.001 },
+    ]) {
+      expect(evaluateRenewal({ ...answers, ...overrides }).status).toBe("profile-incomplete");
+    }
+    expect(evaluateRenewal({ ...answers, sgEpRenewalSameEmployerRole: false }).status).toBe("conditions-not-met");
   });
 });

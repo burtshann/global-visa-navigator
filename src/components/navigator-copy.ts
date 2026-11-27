@@ -70,6 +70,14 @@ export const copy = {
   goToDirectory: { en: "Browse the visa directory", zh: "浏览签证目录" },
   alignment: { en: "Goal relevance", zh: "目标相关性" },
   checkedOutcome: { en: "Checked conditions", zh: "已核对条件" },
+  requiredStages: {
+    en: "Each stage is required.",
+    zh: "每个阶段的要求都须满足。",
+  },
+  stageUnavailable: {
+    en: "No published check covers this stage for your answers.",
+    zh: "目前没有适用于你所填情况的已发布阶段规则。",
+  },
   fullEligibility: { en: "Full eligibility", zh: "完整资格" },
   fullEligibilityUnverified: { en: "Full eligibility still needs review", zh: "完整资格仍待核实" },
   goalAligned: { en: "Matches your goal", zh: "符合你的目标" },

@@ -25,6 +25,7 @@ export type RuleSource = Readonly<{
   applicableWhen: Localized;
   evidence?: Localized;
   effectiveDateUrl?: string;
+  effectiveDateNote?: Localized;
   // Null records that the official evidence did not establish an effective date.
   effectiveFrom: string | null;
   // Exclusive end date.
@@ -164,7 +165,7 @@ export type PathwayEvaluation = Readonly<{
   fullEligibility: "unverified";
 }>;
 
-function isDate(value: string | null | undefined): value is string {
+export function isDate(value: string | null | undefined): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
   }

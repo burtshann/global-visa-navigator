@@ -85,7 +85,7 @@ function SourceDetails({ source, language }: { source: RuleSource; language: Lan
         <dt>{copy.applicability[language]}</dt><dd>{source.applicableWhen[language]}</dd>
         {source.evidence && <><dt>{copy.sourceEvidence[language]}</dt><dd>{source.evidence[language]}</dd></>}
         <dt>{copy.effective[language]}</dt>
-        <dd>{source.effectiveFrom ?? copy.effectiveUnknown[language]}</dd>
+        <dd>{source.effectiveDateNote?.[language] ?? source.effectiveFrom ?? copy.effectiveUnknown[language]}</dd>
         {source.effectiveUntil && (
           <><dt>{copy.effectiveUntil[language]}</dt><dd>{source.effectiveUntil}</dd></>
         )}

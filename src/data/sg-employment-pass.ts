@@ -1,4 +1,8 @@
-import type { Policy, RuleSource } from "@/domain/policy";
+import type { Condition, Policy, RuleExpression, RuleSource } from "@/domain/policy";
+import { sgEpCompassPolicy } from "./sg-ep-compass";
+import {
+  ordinaryRenewal, renewalDeadline, renewalDeadlineReached, renewalWindowOpened, sgEpRenewalUrl,
+} from "./sg-ep-renewal-window";
 
 const momEligibility = "https://www.mom.gov.sg/passes-and-permits/employment-pass/eligibility";
 const momKeyFacts = "https://www.mom.gov.sg/passes-and-permits/employment-pass/key-facts";
@@ -44,6 +48,26 @@ const schedules: readonly SalarySchedule[] = [
     ],
   },
 ];
+
+function salaryTable(schedule: SalarySchedule, source: RuleSource): RuleExpression {
+  return {
+    kind: "threshold-table",
+    id: "sg-ep-minimum-fixed-monthly-salary",
+    input: "answer:sgEpFixedMonthlySalarySgd",
+    bandInput: "answer:sgEpAge",
+    categoryInput: "answer:sgEpFinancialSector",
+    bandStarts,
+    maximumBandInput: 120,
+    categories: [
+      { value: false, minimums: schedule.otherSectors },
+      { value: true, minimums: schedule.financialServices },
+    ],
+    unit: { en: "SGD/month", zh: "新元/月" },
+    label: { en: "Minimum fixed monthly salary for your age and the employer's sector", zh: "按你的年龄和雇主行业适用的最低固定月薪" },
+    nextStep: { en: "Confirm the applicable age and sector with the employer, then check the qualifying rows and the offered fixed monthly salary with MOM.", zh: "请与雇主确认适用年龄及行业，再查看人力部的薪资表，核对录用所列的固定月薪。" },
+    source,
+  };
+}
 
 function salaryPolicy(schedule: SalarySchedule): Policy {
   const year = schedule.from.slice(0, 4);
@@ -110,27 +134,174 @@ function salaryPolicy(schedule: SalarySchedule): Policy {
         kind: "all",
         children: [
           { kind: "condition", conditionId: "sg-ep-singapore-job-offer" },
-          {
-            kind: "threshold-table",
-            id: "sg-ep-minimum-fixed-monthly-salary",
-            input: "answer:sgEpFixedMonthlySalarySgd",
-            bandInput: "answer:sgEpAge",
-            categoryInput: "answer:sgEpFinancialSector",
-            bandStarts,
-            maximumBandInput: 120,
-            categories: [
-              { value: false, minimums: schedule.otherSectors },
-              { value: true, minimums: schedule.financialServices },
-            ],
-            unit: { en: "SGD/month", zh: "新元/月" },
-            label: { en: "Minimum fixed monthly salary for your age and the employer's sector", zh: "按你的年龄和雇主行业适用的最低固定月薪" },
-            nextStep: { en: "Confirm the applicable age and sector with the employer, then check the qualifying rows and the offered fixed monthly salary with MOM.", zh: "请与雇主确认适用年龄及行业，再查看人力部的薪资表，核对录用所列的固定月薪。" },
-            source: salarySource,
-          },
+          salaryTable(schedule, salarySource),
         ],
       },
     },
   };
 }
 
-export const sgEmploymentPassPolicies: readonly Policy[] = schedules.map(salaryPolicy);
+const renewalSources: readonly [RuleSource, RuleSource] = [
+  {
+    url: momEligibility,
+    effectiveDateUrl: schedules[0].effectiveDateUrl,
+    applicableWhen: {
+      en: "Ordinary renewals for passes expiring from 1 January 2026 to 31 December 2027.",
+      zh: "适用于准证在 2026 年 1 月 1 日至 2027 年 12 月 31 日到期的普通续签。",
+    },
+    evidence: {
+      en: "MOM applies the published age and sector salary table based on the pass expiry date. Use fixed monthly salary in SGD.",
+      zh: "新加坡人力部按现有准证到期日选用公布的年龄及行业薪资表。工资按新元固定月薪计算。",
+    },
+    effectiveFrom: "2026-01-01",
+    lastVerifiedAt: "2026-11-26T18:04:30Z",
+    reviewStatus: "verified",
+  },
+  {
+    url: momEligibility,
+    effectiveDateUrl: schedules[1].effectiveDateUrl,
+    effectiveDateNote: {
+      en: "Passes expiring from 1 January 2028",
+      zh: "2028 年 1 月 1 日起到期的准证",
+    },
+    applicableWhen: {
+      en: "Ordinary renewals for passes expiring on or after 1 January 2028, including renewals filed before that date.",
+      zh: "适用于准证在 2028 年 1 月 1 日或以后到期的普通续签，包括在该日期前递交的续签。",
+    },
+    evidence: {
+      en: "MOM's revised age and sector thresholds apply to passes expiring from 1 January 2028. The expiry date selects the table even when the employer files early.",
+      zh: "新加坡人力部调整后的年龄及行业薪资门槛适用于 2028 年 1 月 1 日起到期的准证。即使雇主提前递交，仍以准证到期日选用薪资表。",
+    },
+    // This source also governs advance renewals. The cutover is a pass-expiry
+    // condition in the collected profile, not the assessment date.
+    effectiveFrom: null,
+    lastVerifiedAt: "2026-11-26T18:04:30Z",
+    reviewStatus: "verified",
+  },
+];
+
+const renewalScopeSource: RuleSource = {
+  url: sgEpRenewalUrl,
+  applicableWhen: { en: "Renewals of an existing Employment Pass.", zh: "适用于现有就业准证的续签。" },
+  evidence: {
+    en: "An EP renewal requires the candidate to keep working for the same employer in a managerial, executive or specialised job. Ordinary EP renewals may be filed up to six months before expiry.",
+    zh: "EP 续签要求申请人在同一雇主处继续从事管理、高管或专业岗位。普通 EP 最早可于到期前六个月提交续签。",
+  },
+  effectiveFrom: null,
+  lastVerifiedAt: "2026-11-26T18:04:30Z",
+  reviewStatus: "verified",
+};
+
+const renewalDateConditions: readonly Condition[] = [
+  {
+    id: "sg-ep-renewal-before-2028",
+    input: "answer:sgEpRenewalExpiryDate",
+    operator: "lte",
+    expected: 20271231,
+    label: { en: "The current pass expires before 1 January 2028", zh: "现有准证在 2028 年 1 月 1 日之前到期" },
+    nextStep: { en: "Check the expiry date printed on the current pass.", zh: "核对现有准证上显示的到期日。" },
+    source: renewalSources[0],
+  },
+  {
+    id: "sg-ep-renewal-from-2028",
+    input: "answer:sgEpRenewalExpiryDate",
+    operator: "gte",
+    expected: 20280101,
+    label: { en: "The current pass expires on or after 1 January 2028", zh: "现有准证到期日为 2028 年 1 月 1 日或以后" },
+    nextStep: { en: "Check the expiry date printed on the current pass.", zh: "核对现有准证上显示的到期日。" },
+    source: renewalSources[1],
+  },
+];
+
+const renewalPolicy: Policy = {
+  id: "sg-ep-stage-1-renewal",
+  version: "2026-11-27.1",
+  stage: "application",
+  name: { en: "Employment Pass renewal salary check", zh: "就业准证续签薪资核对" },
+  scope: {
+    en: "Checks the deadline for all renewals. The opening window and Stage 1 salary checks require confirmation that the current pass is an ordinary EP. Confirm the separate EP (Sponsorship) procedure with MOM.",
+    zh: "截止日期适用于所有续签类型。续签开放日期和第一阶段薪资核对须先确认持有普通就业准证。持担保类准证时，请向新加坡人力部核实另行适用的续签流程。",
+  },
+  conditions: [
+    {
+      id: "sg-ep-is-renewal",
+      input: "answer:sgEpInitialApplication",
+      operator: "eq",
+      expected: false,
+      label: { en: "This is a renewal of an existing Employment Pass", zh: "正在续签现有就业准证" },
+      nextStep: { en: "Confirm whether you are renewing an existing pass.", zh: "请确认是否为现有准证续签。" },
+      source: renewalScopeSource,
+    },
+    {
+      id: "sg-ep-renewal-same-employer",
+      input: "answer:sgEpRenewalSameEmployerRole",
+      operator: "eq",
+      expected: true,
+      label: { en: "You will continue in a managerial, executive or specialised job with the same employer", zh: "你将继续在同一雇主处从事管理、高管或专业岗位" },
+      nextStep: { en: "Check the employer and role with MOM. For a change of employer, ask about a new pass application.", zh: "请向新加坡人力部核实雇主和岗位。更换雇主时，请核实新申请要求。" },
+      source: renewalScopeSource,
+    },
+    renewalDeadline,
+    renewalDeadlineReached,
+    ordinaryRenewal,
+    renewalWindowOpened,
+    ...renewalDateConditions,
+  ],
+  expression: {
+    kind: "when",
+    test: {
+      kind: "all",
+      children: [
+        { kind: "condition", conditionId: "sg-ep-is-renewal" },
+        {
+          kind: "any",
+          // Apply an already missed deadline even when the pass type is not known or covered.
+          children: [
+            { kind: "condition", conditionId: ordinaryRenewal.id },
+            { kind: "condition", conditionId: renewalDeadlineReached.id },
+          ],
+        },
+      ],
+    },
+    requirement: {
+      kind: "all",
+      children: [
+        { kind: "condition", conditionId: renewalDeadline.id },
+        {
+          kind: "when",
+          test: { kind: "condition", conditionId: renewalDeadline.id },
+          requirement: {
+            kind: "all",
+            children: [
+              { kind: "condition", conditionId: renewalWindowOpened.id },
+              {
+                kind: "when",
+                test: { kind: "condition", conditionId: renewalWindowOpened.id },
+                requirement: {
+                  kind: "all",
+                  children: [
+                    { kind: "condition", conditionId: "sg-ep-renewal-same-employer" },
+                    {
+                      kind: "any",
+                      children: renewalDateConditions.map(({ id }, index) => ({
+                        kind: "when",
+                        test: { kind: "condition", conditionId: id },
+                        requirement: salaryTable(schedules[index], renewalSources[index]),
+                      })),
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
+};
+
+export const sgEmploymentPassPolicies: readonly Policy[] = [
+  ...schedules.map(salaryPolicy),
+  renewalPolicy,
+  sgEpCompassPolicy,
+];

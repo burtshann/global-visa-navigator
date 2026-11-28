@@ -311,3 +311,47 @@ test.describe("mobile viewport", () => {
     await expect(employmentPass.getByText(/Asia\/Singapore/)).toBeVisible();
   });
 });
+
+test("separates the Canadian pre-pool 67-point threshold from later decisions on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("skilled-migration");
+  const answer = (name: string) => page.locator(`#question-ca-express-entry-caFsw${name}`);
+  for (const field of ["OutsideQuebec", "FirstTest", "PrimaryWork", "FundsDocumentable"]) {
+    await answer(field).selectOption("yes");
+  }
+  for (const field of ["SecondLanguage", "CanadianWork", "CanadianStudy", "PartnerLanguage", "PartnerStudy", "PartnerWork", "CanadianRelative"]) {
+    await answer(field).selectOption("no");
+  }
+  await answer("Offer").selectOption("none");
+  await answer("Education").selectOption("three-plus");
+  for (const [field, value] of Object.entries({
+    Age: "30", Reading: "8", Writing: "8", Listening: "8", Speaking: "7",
+    WorkYears: "6", FamilySize: "1", FundsCad: "15263",
+  })) {
+    await answer(field).fill(value);
+  }
+
+  const results = await checkProfile(page);
+  const canadian = results.locator('[data-route-id="ca-express-entry"]');
+  const score = canadian.locator(".points-breakdown > div").filter({ hasText: "Confirmed from your answers" }).locator("dd");
+  await expect(score).toHaveText("67");
+  await expect(canadian.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(canadian.getByText("CRS score not calculated", { exact: true })).toBeVisible();
+  await expect(canadian.getByText("Invitation not verified", { exact: true })).toBeVisible();
+  await expect(canadian.getByText("Application eligibility not assessed", { exact: true })).toBeVisible();
+
+  await answer("Listening").fill("7");
+  await checkProfile(page);
+  await expect(score).toHaveText("66");
+  await expect(canadian.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+
+  await answer("Listening").fill("");
+  await checkProfile(page);
+  await expect(canadian.getByText("More information needed", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "简体中文", exact: true }).click();
+  const chineseResult = page.getByRole("region", { name: "你的路径核对结果" })
+    .locator('[data-route-id="ca-express-entry"]');
+  await expect(chineseResult.getByText("未核实是否收到邀请", { exact: true })).toBeVisible();
+  await expect(chineseResult.getByText("未评估获邀后的申请资格", { exact: true })).toBeVisible();
+});

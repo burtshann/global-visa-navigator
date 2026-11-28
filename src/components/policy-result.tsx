@@ -182,7 +182,7 @@ export function PolicyDetails({ policy, language, evaluation }: {
     <details className="rules" open={evaluation ? true : undefined}>
       <summary>{copy.checks[language]}</summary>
       <p className="policy-meta">
-        {stageLabels[policy.stage][language]} <span aria-hidden="true">·</span>{" "}
+        {(policy.assessmentLabel ?? stageLabels[policy.stage])[language]} <span aria-hidden="true">·</span>{" "}
         {copy.version[language]} {policy.version}
       </p>
       {evaluation

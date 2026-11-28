@@ -66,6 +66,7 @@ type ThresholdTable = Readonly<RuleSummary & {
   categoryInput: ConditionInput;
   bandStarts: readonly number[];
   maximumBandInput: number;
+  incrementAboveLastBand?: number;
   categories: readonly Readonly<{
     value: boolean | string;
     minimums: readonly number[];
@@ -90,6 +91,7 @@ export type Policy = Readonly<{
   id: string;
   version: string;
   stage: PolicyStage;
+  assessmentLabel?: Localized;
   name?: Localized;
   scope?: Localized;
   conditions: readonly Condition[];
@@ -264,10 +266,11 @@ function isPointValue(value: number): boolean {
 }
 
 function isUsableThresholdTable(table: ThresholdTable, asOf: string): boolean {
-  const { categories, bandStarts, maximumBandInput } = table;
+  const { categories, bandStarts, maximumBandInput, incrementAboveLastBand } = table;
   return isCurrentSource(table.source, asOf) &&
     new Set([table.input, table.bandInput, table.categoryInput]).size === 3 &&
     isPointValue(maximumBandInput) &&
+    (incrementAboveLastBand === undefined || (isPointValue(incrementAboveLastBand) && incrementAboveLastBand > 0)) &&
     bandStarts.length > 0 &&
     bandStarts.every((start, index) => isPointValue(start) && start <= maximumBandInput &&
       (index === 0 || start > bandStarts[index - 1])) &&
@@ -384,7 +387,14 @@ function evaluateThreshold(
 
   if (typeof bandAnswer === "number" && isPointValue(bandAnswer) && bandAnswer <= expression.maximumBandInput && category) {
     const band = expression.bandStarts.findLastIndex((start) => start <= bandAnswer);
-    minimum = category.minimums[band] ?? null;
+    const bandMinimum = category.minimums[band];
+    if (bandMinimum !== undefined) {
+      const additional = band === expression.bandStarts.length - 1 && expression.incrementAboveLastBand !== undefined
+        ? (bandAnswer - expression.bandStarts[band]) * expression.incrementAboveLastBand
+        : 0;
+      const required = bandMinimum + additional;
+      if (Number.isFinite(required) && required <= Number.MAX_SAFE_INTEGER) minimum = required;
+    }
   }
 
   const status = minimum === null || typeof amount !== "number" || !Number.isFinite(amount) ||

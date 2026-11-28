@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "../domain/policy";
 import { categoryLabels, countries, routes } from "./catalog";
 
-const verifiedDate = "2026-11-26";
+const verifiedDate = "2026-11-28";
 
 describe("published visa catalog", () => {
   it("covers all nine destinations and all five categories with official links", () => {
@@ -28,6 +28,7 @@ describe("published visa catalog", () => {
     }));
     expect(current).toEqual([
       "uk-graduate", "de-opportunity-card-skilled-worker", "de-opportunity-card-points",
+      "de-opportunity-card-in-germany", "de-opportunity-card-repeat", "de-opportunity-card-follow-up",
       "uk-skilled-worker-initial", "sg-ep-stage-1-2025",
     ]);
 
@@ -47,6 +48,7 @@ describe("published visa catalog", () => {
         inUk: true,
         ukCompletionReported: true,
         outsideEuEfta: true,
+        deCardCase: "first-abroad",
         deRecognizedQualification: false,
         deLivelihoodEvidence: true,
       },

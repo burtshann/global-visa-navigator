@@ -61,7 +61,7 @@ test("calculates Opportunity Card points from entered profile evidence", async (
 
   const question = (answer: string) => page.locator(`#question-de-opportunity-card-${answer}`);
   await question("outsideEuEfta").selectOption("yes");
-  await question("deApplyingFromAbroad").selectOption("yes");
+  await question("deCardCase").selectOption("first-abroad");
   await question("deQualificationBasis").selectOption("academic");
   await question("deGermanLevel").selectOption("B1");
   await question("deEnglishLevel").selectOption("none");
@@ -310,4 +310,61 @@ test.describe("mobile viewport", () => {
     await expect(employmentPass.getByText("Full eligibility still needs review", { exact: true })).toBeVisible();
     await expect(employmentPass.getByText(/Asia\/Singapore/)).toBeVisible();
   });
+});
+
+test("keeps German domestic, repeat and further-extension checks separate", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openEnglish(page);
+  await page.getByLabel("Main goal").selectOption("job-search");
+  const answer = (name: string) => page.locator(`#question-de-opportunity-card-${name}`);
+  await answer("outsideEuEfta").selectOption("yes");
+  await answer("deLivelihoodEvidence").selectOption("yes");
+
+  await answer("deCardCase").selectOption("first-in-germany");
+  const results = await checkProfile(page);
+  const domestic = results.locator('[data-policy-id="de-opportunity-card-in-germany"]');
+  await expect(domestic.getByText("More information needed", { exact: true })).toBeVisible();
+  await answer("deSection3Or4Title").selectOption("no");
+  await checkProfile(page);
+  await expect(domestic.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+
+  await answer("deCardCase").selectOption("repeat");
+  await answer("deRepeatInGermany").selectOption("no");
+  await answer("deRepeatWaitConfirmed").selectOption("yes");
+  await expect(answer("deSection3Or4Title")).toHaveCount(0);
+  await checkProfile(page);
+  const repeat = results.locator('[data-policy-id="de-opportunity-card-repeat"]');
+  await expect(repeat.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(domestic.getByText("These checks do not apply", { exact: true })).toBeVisible();
+
+  await answer("deCardCase").selectOption("further-extension");
+  await checkProfile(page);
+  const followUp = results.locator('[data-policy-id="de-opportunity-card-follow-up"]');
+  await expect(followUp.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+  await expect(followUp.getByText(/A further extension as an Opportunity Card is excluded/)).toBeVisible();
+});
+
+test("stops the German 2026 funding check at Berlin midnight", async ({ page }) => {
+  const serverClock = ".next/e2e-assessment-clock";
+  try {
+    await writeFile(serverClock, "2026-12-31T22:59:00Z");
+    await openEnglish(page);
+    await page.getByLabel("Main goal").selectOption("job-search");
+    const answer = (name: string) => page.locator(`#question-de-opportunity-card-${name}`);
+    await answer("outsideEuEfta").selectOption("yes");
+    await answer("deCardCase").selectOption("first-abroad");
+    const results = await checkProfile(page);
+    const germany = results.locator('[data-route-id="de-opportunity-card"]');
+    const points = germany.locator('[data-policy-id="de-opportunity-card-points"]');
+    await expect(germany.locator("time")).toHaveText("2026-12-31");
+    await expect(points.getByText(/EUR 1,091 per month/)).toBeVisible();
+
+    await writeFile(serverClock, "2026-12-31T23:01:00Z");
+    await checkProfile(page);
+    await expect(germany.locator("time")).toHaveText("2027-01-01");
+    await expect(points).toHaveCount(0);
+    await expect(germany.getByText(/EUR 1,091/)).toHaveCount(0);
+  } finally {
+    await rm(serverClock, { force: true });
+  }
 });

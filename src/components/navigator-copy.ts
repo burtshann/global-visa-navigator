@@ -155,8 +155,4 @@ export const specificQuestions: Record<string, Localized> = {
     en: "Do you hold a qualifying German vocational qualification or degree, or a foreign qualification recognised as equivalent in Germany?",
     zh: "你是否持有符合要求的德国职业资格或学位，或在德国获认可为同等资格的外国学历或职业资格？",
   },
-  deLivelihoodEvidence: {
-    en: "Can you document sufficient means to support yourself under the official Opportunity Card rules?",
-    zh: "你能否按机会卡官方规定提供足以维持生活的财力证明？",
-  },
 };

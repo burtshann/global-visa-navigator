@@ -16,6 +16,10 @@ function wholeYears(value: unknown, maximum: number): number | undefined {
 
 export function prepareMatchingProfile(profile: Profile): Profile {
   const answers = { ...profile.answers };
+  if (answers.deCardCase === undefined && typeof answers.deApplyingFromAbroad === "boolean") {
+    // The older answer can confirm only the original first-from-abroad scope.
+    answers.deCardCase = answers.deApplyingFromAbroad ? "first-abroad" : "other";
+  }
   const lastFive = wholeYears(answers.deRelevantYearsLast5, 5);
   const lastSeven = wholeYears(answers.deRelevantYearsLast7, 7);
   const inconsistentExperience = lastFive !== undefined && lastSeven !== undefined

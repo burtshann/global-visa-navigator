@@ -1,4 +1,5 @@
 import type { Localized, Policy } from "@/domain/policy";
+import { caFederalSkilledWorkerPolicy, caFswLaterStages } from "./ca-federal-skilled-worker";
 import { deOpportunityCardPointsPolicy } from "./de-opportunity-card";
 import type { Category, CountryId } from "./destinations";
 import { deOpportunityCardPolicy, ukGraduatePolicy } from "./policies";
@@ -19,6 +20,7 @@ export type Route = Readonly<{
   policies?: readonly Policy[];
   scope?: Localized;
   policyTimeZone?: string;
+  laterStages?: readonly Readonly<{ id: string; title: Localized; status: Localized; url: string }>[];
 }>;
 
 export const routes: readonly Route[] = [
@@ -62,6 +64,9 @@ export const routes: readonly Route[] = [
     name: { en: "Express Entry", zh: "快速通道" },
     description: { en: "Canada's application system for several economic immigration programs.", zh: "加拿大多个经济类移民项目的申请系统。" },
     officialUrl: "https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry.html",
+    policy: caFederalSkilledWorkerPolicy,
+    policyTimeZone: "America/Toronto",
+    laterStages: caFswLaterStages,
   },
   {
     id: "ca-pgwp", countryId: "CA", category: "post-study",

@@ -31,6 +31,20 @@ function assessmentRoutes(directory: readonly Route[], assessment: Assessment) {
   return directory.map((route) => ({ ...route, ...assessment.policies[route.id] }));
 }
 
+function LaterStages({ route, language }: { route: Route; language: Language }) {
+  if (!route.laterStages?.length) return null;
+  return (
+    <dl className="match-statuses">
+      {route.laterStages.map(({ id, title, status, url }) => (
+        <div key={id}>
+          <dt><OfficialLink className="text-link" href={url} label={title[language]} /></dt>
+          <dd>{status[language]}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function MatchCard({ route, policies, language, localDate }: {
   route: Route;
   policies: readonly CheckedPolicy[];
@@ -61,6 +75,7 @@ function MatchCard({ route, policies, language, localDate }: {
           <PolicyDetails language={language} policy={policy} evaluation={outcome} />
         </div>
       ))}
+      <LaterStages route={route} language={language} />
       <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
     </li>
   );
@@ -381,6 +396,7 @@ export function VisaNavigator({ directory, initialAssessment }: {
                         <PolicyDetails language={language} policy={policy} />
                       </div>
                     ))}
+                    <LaterStages route={route} language={language} />
                     <div className="route-actions">
                       <OfficialLink className="text-link" href={route.officialUrl} label={t("officialDetails")} />
                       <button className="button button--outline button--compact" type="button" aria-pressed={selected} aria-label={`${t("compare")} · ${route.name[language]}`} disabled={!selected && comparison.length === 3} onClick={() => toggleComparison(route.id)}>

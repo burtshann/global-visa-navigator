@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import type { Route } from "../data/catalog";
+import { routes, type Route } from "../data/catalog";
 import type { Policy } from "../domain/policy";
 import { snapshotDigest } from "./policy-snapshots";
 import { loadPublishedRoutes, resolvePublishedRoutes } from "./published-policies";
@@ -41,6 +41,15 @@ describe("policy publication", () => {
     expect(visible.name).toBe(route.name);
     expect(visible.policy).toBeUndefined();
     expect(visible.policies).toEqual([additional]);
+  });
+
+  it("keeps Canadian federal skilled worker checks out of production until the exact snapshot is approved", () => {
+    const canada = routes.find(({ id }) => id === "ca-express-entry")!;
+    const snapshot = canada.policy!;
+    const approval = { ...approvedRow(snapshot), route_id: canada.id };
+    expect(resolvePublishedRoutes([canada], [])[0]).toMatchObject({ policy: undefined, laterStages: canada.laterStages });
+    expect(resolvePublishedRoutes([canada], [approval])[0].policy).toBe(snapshot);
+    expect(resolvePublishedRoutes([canada], [{ ...approval, snapshot_sha256: "outdated" }])[0].policy).toBeUndefined();
   });
 
   it("withholds a status row from another stage or version", () => {

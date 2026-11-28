@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "../domain/policy";
 import { categoryLabels, countries, routes } from "./catalog";
 
-const verifiedDate = "2026-11-26";
+const verifiedDate = "2026-11-28";
 
 describe("published visa catalog", () => {
   it("covers all nine destinations and all five categories with official links", () => {
@@ -28,7 +28,7 @@ describe("published visa catalog", () => {
     }));
     expect(current).toEqual([
       "uk-graduate", "de-opportunity-card-skilled-worker", "de-opportunity-card-points",
-      "uk-skilled-worker-initial", "sg-ep-stage-1-2025",
+      "ca-federal-skilled-worker", "uk-skilled-worker-initial", "sg-ep-stage-1-2025",
     ]);
 
     const singapore = routes.find(({ id }) => id === "sg-employment-pass");
@@ -37,7 +37,7 @@ describe("published visa catalog", () => {
       expect(usable?.map(({ id }) => id)).toEqual([date === "2026-12-31" ? "sg-ep-stage-1-2025" : "sg-ep-stage-1-2027"]);
     }
 
-    const directoryOnly = routes.find(({ id }) => id === "ca-express-entry");
+    const directoryOnly = routes.find(({ id }) => id === "ca-pgwp");
     expect(evaluatePolicy(directoryOnly?.policy, {}, verifiedDate).status).toBe("rules-not-covered");
   });
 

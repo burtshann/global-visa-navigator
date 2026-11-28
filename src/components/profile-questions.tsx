@@ -1,5 +1,6 @@
 import type { Route } from "../data/catalog";
 import { policyInputs, type Localized, type Profile } from "../domain/policy";
+import { caFswQuestions } from "./ca-fsw-questions";
 import { copy, specificQuestions } from "./navigator-copy";
 import { routePolicies, type Language } from "./policy-result";
 
@@ -11,7 +12,7 @@ const sectionLabels = {
 } satisfies Record<string, Localized>;
 
 type Section = keyof typeof sectionLabels;
-type Question = {
+export type Question = {
   label: Localized;
   section: Section;
   help?: Localized;
@@ -27,6 +28,7 @@ const languageLevels = [
 ];
 
 const questions: Record<string, Question> = {
+  ...caFswQuestions,
   age: {
     type: "number", section: "application", min: 0, max: 120, step: 1,
     label: { en: "Age on your application date", zh: "提交申请当日的年龄" },
@@ -200,6 +202,7 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
       inputs.add("answer:deContractNetEurMonthly");
       inputs.add("answer:deBlockedEurMonthly");
     }
+    if (inputs.has("answer:caFswConfirmedFamilySize")) inputs.add("answer:caFswFamilySize");
     const fields = orderedInputs.flatMap((input) => {
       if (!inputs.has(input) || seen.has(input)) return [];
       seen.add(input);

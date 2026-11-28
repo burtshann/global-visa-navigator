@@ -1,4 +1,5 @@
 import type { Policy, RuleSource } from "@/domain/policy";
+import { deFirstAbroad, deSecuredLivelihood } from "./de-opportunity-card-scope";
 
 const verifiedDate = "2026-11-23";
 const ukRules = "https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-graduate";
@@ -68,12 +69,12 @@ export const ukGraduatePolicy = {
 
 export const deOpportunityCardPolicy = {
   id: "de-opportunity-card-skilled-worker",
-  version: "2026-11-26.1",
+  version: "2026-11-28.1",
   stage: "application",
-  name: { en: "Skilled worker mechanism", zh: "技术人才路径" },
+  name: { en: "Skilled worker mechanism from abroad", zh: "境外技术人才路径" },
   scope: {
-    en: "Checks three conditions of an initial skilled-worker application. Applicants in Germany must also check residence-permit requirements.",
-    zh: "核对技术人才首次申请的三项条件。身在德国的申请人还需核对居留许可要求。",
+    en: "Checks skilled-worker qualification and accepted proof of livelihood for a first application from abroad. The mission still checks full eligibility.",
+    zh: "核对境外首次申请的技术人才资格及认可的生活保障证明。完整资格仍由使领馆核验。",
   },
   conditions: [
     {
@@ -120,27 +121,18 @@ export const deOpportunityCardPolicy = {
         },
       },
     },
-    {
-      id: "de-oc-secure-livelihood",
-      input: "answer:deLivelihoodEvidence",
-      operator: "eq",
-      expected: true,
-      label: {
-        en: "You can document sufficient means to support yourself",
-        zh: "能够提供维持在德国生活所需的经济证明",
-      },
-      nextStep: {
-        en: "Review current official funding requirements and accepted forms of proof for your intended stay.",
-        zh: "根据计划停留时间，查阅当前的官方资金要求和可接受的证明形式。",
-      },
-      source: {
-        ...opportunityCardSource,
-        url: "https://www.gesetze-im-internet.de/aufenthg_2004/__20a.html",
-        applicableWhen: {
-          en: "Means of subsistence requirement for the initial Opportunity Card, §20a(4) of the Residence Act.",
-          zh: "机会卡首次申请的生活保障要求，德国《居留法》第 20a(4) 条。",
-        },
-      },
-    },
+    deFirstAbroad,
+    deSecuredLivelihood,
   ],
+  expression: {
+    kind: "when",
+    test: { kind: "all", children: [
+      { kind: "condition", conditionId: deFirstAbroad.id },
+      { kind: "condition", conditionId: "de-oc-nationality-scope" },
+    ] },
+    requirement: { kind: "all", children: [
+      { kind: "condition", conditionId: "de-oc-recognized-qualification" },
+      { kind: "condition", conditionId: deSecuredLivelihood.id },
+    ] },
+  },
 } satisfies Policy;

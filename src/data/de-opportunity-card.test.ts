@@ -3,7 +3,7 @@ import { evaluatePathway, evaluatePolicy, type Profile } from "../domain/policy"
 import { deOpportunityCardPointsPolicy as policy } from "./de-opportunity-card";
 import { prepareMatchingProfile } from "./matching-profile";
 
-const asOf = "2026-11-23";
+const asOf = "2026-11-28";
 const answers = {
   outsideEuEfta: true,
   deApplyingFromAbroad: true,
@@ -156,7 +156,7 @@ describe("initial German Opportunity Card points mechanism, applying from abroad
       expect(new URL(source.url).protocol).toBe("https:");
       expect(new URL(source.effectiveDateUrl!).protocol).toBe("https:");
       expect(source.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(source.lastVerifiedAt).toMatch(/^2026-11-23T/);
+      expect(source.lastVerifiedAt).toMatch(/^2026-11-(23|28)T/);
       expect(source.applicableWhen).toEqual(expect.objectContaining({ zh: expect.any(String), en: expect.any(String) }));
       expect(source.evidence).toEqual(expect.objectContaining({ zh: expect.any(String), en: expect.any(String) }));
     }

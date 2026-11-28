@@ -13,6 +13,34 @@
       "normalizer": "de-section-20a-v1",
       "capturedAt": "2026-11-23T09:27:22Z",
       "sha256": "59d36cded6a4667bd029495c89fd2a788f6c791682e75235143b706d9c1fee20"
+    },
+    {
+      "id": "de-residence-act-20b",
+      "url": "https://www.gesetze-im-internet.de/aufenthg_2004/__20b.html",
+      "normalizer": "de-section-20b-v1",
+      "capturedAt": "2026-11-28T12:02:16.689Z",
+      "sha256": "1dce27a16a8cac8f2d6aafb42907dd92e917219508d8705ab40c3b0916474379"
+    },
+    {
+      "id": "de-opportunity-card-annex",
+      "url": "https://www.gesetze-im-internet.de/aufenthg_2004/anlage.html",
+      "normalizer": "de-opportunity-card-annex-v1",
+      "capturedAt": "2026-11-28T12:02:18.026Z",
+      "sha256": "981d4c907f555313a287679be7c34c913182242ede71564368134aabcd0d8582"
+    },
+    {
+      "id": "de-residence-act-18g",
+      "url": "https://www.gesetze-im-internet.de/aufenthg_2004/__18g.html",
+      "normalizer": "de-section-18g-v1",
+      "capturedAt": "2026-11-28T12:06:28.133Z",
+      "sha256": "85e7c39cd56c6bcc63b8d56028510263b77255fe4fb62e984aa96608644fcf96"
+    },
+    {
+      "id": "de-embassy-skopje-opportunity-card",
+      "url": "https://skopje.diplo.de/mk-de/service/05-visaeinreise/2633368-2633368",
+      "normalizer": "de-skopje-opportunity-card-v1",
+      "capturedAt": "2026-11-28T12:05:19.670Z",
+      "sha256": "f65735e25e7b94791f713a912b189ed93d7000b50b766c91678485c64bd44bb6"
     }
   ]
 }

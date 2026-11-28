@@ -1,4 +1,5 @@
 import type { Condition, Localized, Policy, RuleExpression, RuleSource, ScoreCategory } from "../domain/policy";
+import { deFirstAbroad } from "./de-opportunity-card-scope";
 import { de2026MonthlyMeansEur } from "./matching-profile";
 
 const t = (en: string, zh: string): Localized => ({ en, zh });
@@ -7,7 +8,7 @@ const residenceAct = "https://www.gesetze-im-internet.de/aufenthg_2004/__20a.htm
 const pointsAct = "https://www.gesetze-im-internet.de/aufenthg_2004/__20b.html";
 const annex = "https://www.gesetze-im-internet.de/aufenthg_2004/anlage.html";
 const federalFaq = "https://www.make-it-in-germany.com/en/visa-recognition/opportunity-card/questions-answers";
-const federalHandbook = "https://www.auswaertiges-amt.de/resource/blob/207816/448ee20550723a28bf51724b8bebb5c1/visumhandbuch-data.pdf";
+const federalHandbook = "https://www.auswaertiges-amt.de/resource/blob/207816/fcd6e66ccc3b169cc3569cec05cdebcf/visumhandbuch-data.pdf";
 const commencement = "https://www.recht.bund.de/bgbl/1/2023/217/regelungstext.pdf?__blob=publicationFile&v=2";
 
 function officialSource(url: string, applicableWhen: Localized, evidence: Localized): RuleSource {
@@ -31,12 +32,6 @@ const nonEftaSource = officialSource(
   "https://www.make-it-in-germany.com/en/visa-recognition/apply-for-visa",
   t("Citizenship scope of the job-search residence title.", "求职居留许可的国籍适用范围。"),
   t("EU and EFTA nationals have free movement. This assessment is for applicants who have neither citizenship status.", "欧盟及欧洲自由贸易联盟公民享有自由流动权。本次核对面向不持有上述国籍的申请人。"),
-);
-
-const abroadSource = officialSource(
-  residenceAct,
-  t("Section 20a(4)–(5), initial applications from abroad.", "德国《居留法》第 20a(4)–(5) 条，境外首次申请。"),
-  t("In-country applications and repeat cards have additional provisions, so the screen is scoped to first applications from outside Germany.", "境内及再次申请另有规定，本次核对限于从德国境外首次申请。"),
 );
 
 const qualificationSource = officialSource(
@@ -98,11 +93,14 @@ const shortageSource = officialSource(
   t("The qualifying credential itself must relate to an occupation in the listed ISCO groups. A job title alone is insufficient evidence.", "合规资格本身须对应所列 ISCO 职业组。单凭职位名称无法确认。"),
 );
 
-const ageSource = officialSource(
-  federalHandbook,
-  t("Section 20b(1) nos. 9–10 and the annex, age when applying.", "德国《居留法》第 20b(1) 条第 9–10 项及附件，以申请时年龄为准。"),
-  t("Federal visa handbook guidance (pages 8–9) and German mission instructions differ on inclusion of the 35th and 40th birthdays. Entering whole years at either boundary leaves the potentially affected point unconfirmed.", "德国联邦签证手册第 8–9 页与部分德国使领馆指引对是否包含 35 岁及 40 岁生日的表述不同。只填写年龄整数时，这两个边界可能涉及的分数保留待核实。"),
-);
+const ageSource = {
+  ...officialSource(
+    federalHandbook,
+    t("Section 20b(1) nos. 9–10 and the annex, age when applying.", "德国《居留法》第 20b(1) 条第 9–10 项及附件，以申请时年龄为准。"),
+    t("The federal visa handbook (Opportunity Card, p. 9) changes bands on the 35th and 40th birthdays. The German Embassy in Skopje includes each birthday in the earlier band. With only whole years, the affected point remains unconfirmed at ages 35 and 40.", "联邦签证手册（机会卡章节第 9 页）从 35 岁和 40 岁生日当天起变更档次。德国驻斯科普里使馆将生日当天纳入上一档。仅填写整岁时，35 岁和 40 岁的受影响积分保留待核实。"),
+  ),
+  lastVerifiedAt: "2026-11-28T12:05:20Z",
+};
 
 const priorStaySource = officialSource(
   federalHandbook,
@@ -143,7 +141,7 @@ const contractNext = t("Verify the signed contract with the German employer, inc
 
 const conditions: readonly Condition[] = [
   equals("outside-eu-efta", "answer:outsideEuEfta", true, t("No EU or EFTA citizenship", "未持有欧盟或欧洲自由贸易联盟成员国国籍"), t("Review German entry guidance for each citizenship held.", "按持有的每项国籍核对德国入境指引。"), nonEftaSource),
-  equals("first-application-abroad", "answer:deApplyingFromAbroad", true, t("Applying for the first card from outside Germany", "从德国境外首次申请"), t("Review the separate German rules for applications inside Germany, extensions or repeat cards.", "核对德国境内申请、续期或再次申请的独立规定。"), abroadSource),
+  deFirstAbroad,
   levels("qualifying-foreign-credential", "answer:deQualificationBasis", ["academic", "vocational", "ahk"], t("Confirmed foreign degree, vocational qualification or qualifying AHK credential", "已确认的外国学位、职业资格或合规 AHK 证书"), qualificationNext, qualificationSource),
   equals("partial-recognition", "answer:dePartialRecognition", true, t("Official adaptation or compensatory-measures determination", "适应或补偿措施的官方认定"), t("Check the German competent authority’s recognition decision.", "核对德国主管机构的资格认定决定。"), partialRecognitionSource),
   levels("german-a1", "answer:deGermanLevel", ["A1", "A2", "B1", "B2", "C1", "C2"], t("Documented German A1 or above", "有德语 A1 或以上证明"), languageNext, languageSource),
@@ -204,14 +202,14 @@ const score: RuleExpression = {
 
 export const deOpportunityCardPointsPolicy: Policy = {
   id: "de-opportunity-card-points",
-  version: "2026-11-26.1",
+  version: "2026-11-28.1",
   name: t("Points mechanism", "积分路径"),
   scope,
   stage: "application",
   conditions,
   expression: {
     kind: "when",
-    test: all(check("outside-eu-efta"), check("first-application-abroad")),
+    test: all(check("outside-eu-efta"), check(deFirstAbroad.id)),
     requirement: all(
       {
         kind: "any",

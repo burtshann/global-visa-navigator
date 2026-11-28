@@ -1,4 +1,5 @@
 import type { Route } from "../data/catalog";
+import { deCardCases } from "../data/de-opportunity-card-scope";
 import { policyInputs, type Localized, type Profile } from "../domain/policy";
 import { copy, specificQuestions } from "./navigator-copy";
 import { routePolicies, type Language } from "./policy-result";
@@ -103,10 +104,45 @@ const questions: Record<string, Question> = {
   },
   "answer:outsideEuEfta": { type: "yes-no", section: "application", label: specificQuestions.outsideEuEfta },
   "answer:deRecognizedQualification": { type: "yes-no", section: "education", label: specificQuestions.deRecognizedQualification },
-  "answer:deLivelihoodEvidence": { type: "yes-no", section: "finance", label: specificQuestions.deLivelihoodEvidence },
-  "answer:deApplyingFromAbroad": {
+  "answer:deLivelihoodEvidence": {
+    type: "yes-no", section: "finance",
+    label: { en: "Have you confirmed the accepted proof of livelihood for this application with the responsible authority?", zh: "你是否已向主管机关核实本次申请适用的生活保障证明？" },
+    help: { en: "Answer Yes only if you can provide confirmed evidence for your requested stay. If you are unsure, leave it blank.", zh: "能提供拟停留期间已核实的证明时选择「是」。不确定时请留空。" },
+  },
+  "answer:deCardCase": {
+    type: "choice", section: "application", options: deCardCases,
+    label: { en: "Which Opportunity Card application are you checking?", zh: "你要核对哪一类机会卡申请？" },
+  },
+  "answer:deRepeatInGermany": {
     type: "yes-no", section: "application",
-    label: { en: "Will you apply for your first Opportunity Card from outside Germany?", zh: "你是否会在德国境外首次申请机会卡？" },
+    label: { en: "Will you be in Germany when you apply again?", zh: "再次递交申请时，你会在德国境内吗？" },
+  },
+  "answer:deSection3Or4Title": {
+    type: "yes-no", section: "application",
+    label: { en: "Is your current German residence title under chapter 2, section 3 or 4?", zh: "你的德国居留许可是否属于第 2 章第 3 节或第 4 节？" },
+    help: { en: "Check the legal basis on your current permit with the local immigration authority.", zh: "按当前许可列明的法律依据向当地外国人管理部门核对。" },
+  },
+  "answer:deRepeatWaitConfirmed": {
+    type: "yes-no", section: "application",
+    label: { en: "After your previous search card expired, have you spent at least as long abroad or lawfully in Germany as you spent in Germany on that card?", zh: "上一张求职机会卡到期后，在境外或在德国合法停留的时长，是否至少等于你此前持该卡在德国实际停留的时间？" },
+    help: { en: "Compare both periods with the authority. Leave blank if either period is uncertain.", zh: "向主管机关核对两个时段。任何时段不确定时请留空。" },
+  },
+  "answer:deFollowUpDuringSearch": {
+    type: "yes-no", section: "application",
+    label: { en: "Did you file the extension during a stay under your initial search Opportunity Card?", zh: "你是否在首次求职机会卡居留期间递交了续期申请？" },
+  },
+  "answer:deFollowUpQualifiedJob": {
+    type: "yes-no", section: "experience",
+    label: { en: "Do you have a contract or binding offer for qualified employment in Germany?", zh: "你是否持有德国境内合格就业的合同或具约束力的工作邀请？" },
+  },
+  "answer:deFollowUpAgencyConsent": {
+    type: "yes-no", section: "experience",
+    label: { en: "Has the Federal Employment Agency consented to this employment?", zh: "德国联邦就业局是否已同意该工作？" },
+    help: { en: "Confirm the decision with the immigration authority. Leave blank while it is pending.", zh: "向外国人管理部门确认决定。仍在办理时请留空。" },
+  },
+  "answer:deFollowUpNoOtherTitle": {
+    type: "yes-no", section: "application",
+    label: { en: "Has the authority confirmed that you do not qualify for another employment residence permit under chapter 2, section 4?", zh: "主管机关是否已确认你不符合第 2 章第 4 节下的其他就业居留许可？" },
   },
   "answer:deQualificationBasis": {
     type: "choice", section: "education",
@@ -190,6 +226,24 @@ type Field = { input: string; id: string; question: Question };
 type QuestionGroup = { route: Route; fields: Field[] };
 export type ProfileDraft = Readonly<Partial<Record<string, string>>>;
 
+function showQuestion(input: string, draft: ProfileDraft) {
+  const situation = draft["answer:deCardCase"];
+  switch (input) {
+    case "answer:deRepeatInGermany":
+    case "answer:deRepeatWaitConfirmed":
+      return situation === "repeat";
+    case "answer:deSection3Or4Title":
+      return situation === "first-in-germany" || (situation === "repeat" && draft["answer:deRepeatInGermany"] === "yes");
+    case "answer:deFollowUpDuringSearch":
+    case "answer:deFollowUpQualifiedJob":
+    case "answer:deFollowUpAgencyConsent":
+    case "answer:deFollowUpNoOtherTitle":
+      return situation === "follow-up";
+    default:
+      return true;
+  }
+}
+
 const orderedInputs = Object.keys(questions);
 
 export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[] {
@@ -219,7 +273,7 @@ export function readProfile(draft: ProfileDraft, groups: readonly QuestionGroup[
   for (const { fields } of groups) {
     for (const { input, question } of fields) {
       const value = draft[input];
-      if (!value) continue;
+      if (!value || !showQuestion(input, draft)) continue;
 
       if (input === "age") age = Number(value);
       else if (input === "jobOffer") jobOffer = value === "yes";
@@ -282,7 +336,7 @@ export function RuleQuestions({ groups, language, draft, onChange }: {
           <fieldset key={route.id}>
             <legend>{route.name[language]}</legend>
             {sections.map((section) => {
-              const fieldsInSection = fields.filter(({ question }) => question.section === section);
+              const fieldsInSection = fields.filter(({ input, question }) => question.section === section && showQuestion(input, draft));
               if (fieldsInSection.length === 0) return null;
               return (
                 <div className="question-section" key={section}>

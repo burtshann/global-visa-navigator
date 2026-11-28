@@ -1,4 +1,5 @@
 import type { Localized, Policy } from "@/domain/policy";
+import { deOpportunityCardScopedPolicies } from "./de-opportunity-card-scope";
 import { deOpportunityCardPointsPolicy } from "./de-opportunity-card";
 import type { Category, CountryId } from "./destinations";
 import { deOpportunityCardPolicy, ukGraduatePolicy } from "./policies";
@@ -39,11 +40,12 @@ export const routes: readonly Route[] = [
     description: { en: "A residence route for looking for qualified employment in Germany.", zh: "用于在德国寻找符合要求的工作岗位。" },
     officialUrl: "https://www.make-it-in-germany.com/en/visa-recognition/opportunity-card/job-search",
     scope: {
-      en: "The initial card has a skilled-worker mechanism and a points mechanism. Applications within Germany, repeat applications and extensions have additional rules.",
-      zh: "首次申请分为技术人才路径与积分路径。德国境内申请、再次申请和续期另有规则。",
+      en: "Choose where you are applying and which card you need. The standard 2026 amount is used only for the dated 2026 points check. Ask the responsible authority about evidence for later years.",
+      zh: "请选择申请地点及申请情形。2026 年标准金额仅用于 2026 年的积分路径核对。之后年度适用的证明请向主管机关确认。",
     },
     policy: deOpportunityCardPolicy,
-    policies: [deOpportunityCardPointsPolicy],
+    policies: [deOpportunityCardPointsPolicy, ...deOpportunityCardScopedPolicies],
+    policyTimeZone: "Europe/Berlin",
   },
   {
     id: "us-h1b", countryId: "US", category: "skilled-work",

@@ -6,16 +6,25 @@ import { fileURLToPath } from "node:url";
 const baselineFile = new URL("../db/policy-sources.baseline.json", import.meta.url);
 const digestPattern = /^[0-9a-f]{64}$/;
 
+const germanStatute = {
+  encoding: "iso-8859-1",
+  content: /<div\b[^>]*\bclass=["']jnhtml["'][^>]*>([\s\S]+?)<div\b[^>]*\bid=["']fusszeile["']/i,
+};
+
 const normalizers = {
   "govuk-graduate-article-v1": {
     encoding: "utf-8",
     content: /<article\b[^>]*\baria-labelledby=["']section-title["'][^>]*>([\s\S]+?)<\/article\s*>/i,
     required: /\bGR\s+1\.2\b/,
   },
-  "de-section-20a-v1": {
-    encoding: "iso-8859-1",
-    content: /<div\b[^>]*\bclass=["']jnhtml["'][^>]*>([\s\S]+?)<div\b[^>]*\bid=["']fusszeile["']/i,
-    required: /\bChancenkarte\b/,
+  "de-section-20a-v1": { ...germanStatute, required: /\bChancenkarte\b/ },
+  "de-section-20b-v1": { ...germanStatute, required: /\bPunkte\b[\s\S]*\bChancenkarte\b/ },
+  "de-opportunity-card-annex-v1": { ...germanStatute, required: /§\s*20b[\s\S]*\bMindestpunktzahl\b/ },
+  "de-section-18g-v1": { ...germanStatute, required: /\bBlaue Karte EU\b/ },
+  "de-skopje-opportunity-card-v1": {
+    encoding: "utf-8",
+    content: /<div\b[^>]*\bclass=["']c-rte--default["'][^>]*>([\s\S]+?)<a\b[^>]*\bclass=["']c-cta--backto\b/i,
+    required: /\bChancenkarte\b/i,
   },
 };
 

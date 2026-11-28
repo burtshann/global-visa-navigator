@@ -65,3 +65,30 @@ describe("policy source change detection", () => {
     );
   });
 });
+
+describe("Opportunity Card source observations", () => {
+  const statute = (body) => `<div class="jnhtml">${body}</div><div id="fusszeile"></div>`;
+  const mission = (body) => `<div class="c-rte--default">${body}</div><a class="c-cta--backto is-link">Back</a>`;
+
+  it.each([
+    ["de-section-20b-v1", statute, "Punkte für die Chancenkarte", "Punkte für die Chancenkarte nach neuer Regel"],
+    ["de-opportunity-card-annex-v1", statute, "§ 20b: Die Mindestpunktzahl beträgt sechs.", "§ 20b: Die Mindestpunktzahl beträgt sieben."],
+    ["de-section-18g-v1", statute, "Blaue Karte EU: ISCO 21", "Blaue Karte EU: ISCO 22"],
+    ["de-skopje-opportunity-card-v1", mission, "Chancenkarte: 1.091 EUR", "Chancenkarte: 1.100 EUR"],
+  ])("detects changes in %s without writing the baseline", async (id, wrap, before, after) => {
+    const encoding = id.startsWith("de-skopje") ? "utf8" : "latin1";
+    const bytes = (content) => Buffer.from(content, encoding);
+    const baseline = Object.freeze({
+      ...source, id, normalizer: id, sha256: hashPolicyContent(bytes(wrap(before)), id),
+    });
+    const observe = (content) => comparePolicySources([baseline], async () => htmlResponse(bytes(content)));
+    const [[unchanged], [changed], [missing]] = await Promise.all([
+      observe(`<nav>New navigation</nav>${wrap(before)}`),
+      observe(wrap(after)),
+      observe(wrap("Verify browser")),
+    ]);
+    expect(unchanged.status).toBe("unchanged");
+    expect(changed).toMatchObject({ status: "changed", baselineSha256: baseline.sha256 });
+    expect(missing).toMatchObject({ status: "error" });
+  });
+});

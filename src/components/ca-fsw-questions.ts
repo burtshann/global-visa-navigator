@@ -1,4 +1,4 @@
-import { caFswAdaptability, caFswEducation, caFswOfferOptions, caFswSkills } from "../data/ca-federal-skilled-worker";
+import { caFswAdaptability, caFswEducation, caFswOfferOptions, caFswPartnerOptions, caFswSkills } from "../data/ca-federal-skilled-worker";
 import type { Question } from "./profile-questions";
 
 const levels: Record<string, Question> = Object.fromEntries(caFswSkills.map(({ id, label }) => [
@@ -58,6 +58,14 @@ export const caFswQuestions = {
     type: "choice", section: "finance", options: caFswOfferOptions,
     label: { en: "Which federal skilled worker job-offer evidence can you confirm?", zh: "你能确认哪种联邦技术移民录用邀请证明？" },
     help: { en: "For a funds exemption check section 82(2)(a), (b) or (d). Check IRCC’s November 2026 public policy separately if it may apply.", zh: "资金豁免须核对第 82(2)(a)、(b) 或 (d) 条。如可能适用 2026 年 11 月公共政策，请另行查阅 IRCC 指引。" },
+  },
+  "answer:caFswPartnerStatus": {
+    type: "choice", section: "experience", options: caFswPartnerOptions,
+    label: { en: "Which spouse or common-law partner situation applies to you?", zh: "以下哪项符合你的配偶或同居伴侣情况？" },
+    help: {
+      en: "Partner language, study and work points require an accompanying partner who is neither a Canadian citizen nor a permanent resident residing in Canada. If unsure, leave the status blank. If you have no eligible accompanying partner, answer No to the three partner points questions. Include your spouse or common-law partner in your family count either way.",
+      zh: "伴侣语言、学习和工作积分仅适用于随行且既非加拿大公民、也非居住在加拿大的永久居民的伴侣。如不确定，请将身份选项留空。如没有符合条件的随行伴侣，请对下方三项伴侣积分问题选择「否」。核算家庭人数时仍须计入配偶或同居伴侣。",
+    },
   },
   ...adaptability,
   "answer:caFswFamilySize": {

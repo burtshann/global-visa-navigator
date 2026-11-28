@@ -312,7 +312,7 @@ test.describe("mobile viewport", () => {
   });
 });
 
-test("separates the Canadian pre-pool 67-point threshold from later decisions on mobile", async ({ page }) => {
+async function openCanadianProfile(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await openEnglish(page);
   await page.getByLabel("Main goal").selectOption("skilled-migration");
@@ -324,6 +324,7 @@ test("separates the Canadian pre-pool 67-point threshold from later decisions on
     await answer(field).selectOption("no");
   }
   await answer("Offer").selectOption("none");
+  await answer("PartnerStatus").selectOption("no-partner");
   await answer("Education").selectOption("three-plus");
   for (const [field, value] of Object.entries({
     Age: "30", Reading: "8", Writing: "8", Listening: "8", Speaking: "7",
@@ -331,7 +332,11 @@ test("separates the Canadian pre-pool 67-point threshold from later decisions on
   })) {
     await answer(field).fill(value);
   }
+  return answer;
+}
 
+test("separates the Canadian pre-pool 67-point threshold from later decisions on mobile", async ({ page }) => {
+  const answer = await openCanadianProfile(page);
   const results = await checkProfile(page);
   const canadian = results.locator('[data-route-id="ca-express-entry"]');
   const score = canadian.locator(".points-breakdown > div").filter({ hasText: "Confirmed from your answers" }).locator("dd");
@@ -354,4 +359,86 @@ test("separates the Canadian pre-pool 67-point threshold from later decisions on
     .locator('[data-route-id="ca-express-entry"]');
   await expect(chineseResult.getByText("未核实是否收到邀请", { exact: true })).toBeVisible();
   await expect(chineseResult.getByText("未评估获邀后的申请资格", { exact: true })).toBeVisible();
+});
+
+
+for (const field of ["PartnerLanguage", "PartnerStudy", "PartnerWork"]) {
+  test(`rechecks the family size when Canadian ${field} points are claimed`, async ({ page }) => {
+    const answer = await openCanadianProfile(page);
+    await answer("Reading").fill("7");
+    await answer("WorkYears").fill("2");
+    await answer("PartnerStatus").selectOption("eligible-accompanying");
+    await answer(field).selectOption("yes");
+
+    const results = await checkProfile(page);
+    const canadian = results.locator('[data-route-id="ca-express-entry"]');
+    const score = canadian.locator(".points-breakdown > div").filter({ hasText: "Confirmed from your answers" }).locator("dd");
+    await expect(score).toHaveText("67");
+    await expect(canadian.getByText("More information needed", { exact: true })).toBeVisible();
+    await expect(canadian.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
+    await expect(canadian.getByText(/Confirm your family size/)).toBeVisible();
+
+    await answer("FamilySize").fill("2");
+    await answer("FundsCad").fill("19000.99");
+    await checkProfile(page);
+    await expect(canadian.getByText("19,001 CAD", { exact: true })).toBeVisible();
+    await expect(canadian.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+
+    await answer("FundsCad").fill("19001");
+    await checkProfile(page);
+    await expect(canadian.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  });
+}
+
+test("keeps Canadian partner status and the funds exemption independent", async ({ page }) => {
+  const answer = await openCanadianProfile(page);
+  await answer("Reading").fill("7");
+  await answer("WorkYears").fill("2");
+  await answer("PartnerWork").selectOption("yes");
+  await answer("FamilySize").fill("2");
+  await answer("FundsCad").fill("19001");
+
+  await answer("PartnerStatus").selectOption("other-partner");
+  const results = await checkProfile(page);
+  const canadian = results.locator('[data-route-id="ca-express-entry"]');
+  const score = canadian.locator(".points-breakdown > div").filter({ hasText: "Confirmed from your answers" }).locator("dd");
+  await expect(score).toHaveText("62");
+  await expect(canadian.getByText("A checked requirement is unmet", { exact: true })).toBeVisible();
+
+  await answer("PartnerStatus").selectOption("");
+  await checkProfile(page);
+  await expect(score).toHaveText("62");
+  await expect(canadian.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await answer("PartnerStatus").selectOption("eligible-accompanying");
+  await answer("FamilySize").fill("1");
+  await answer("Offer").selectOption("ordinary-exempt");
+  await checkProfile(page);
+  await expect(canadian.getByText("All checked conditions met", { exact: true })).toBeVisible();
+  await expect(canadian.getByText("Minimum for these answers", { exact: true })).toHaveCount(0);
+});
+
+test("credits a Canadian primary work year while the total is blank", async ({ page }) => {
+  const answer = await openCanadianProfile(page);
+  await answer("Education").selectOption("doctoral");
+  for (const skill of ["Reading", "Writing", "Listening", "Speaking"]) await answer(skill).fill("9");
+  await answer("WorkYears").fill("");
+
+  const results = await checkProfile(page);
+  const canadian = results.locator('[data-route-id="ca-express-entry"]');
+  const score = canadian.locator(".points-breakdown > div").filter({ hasText: "Confirmed from your answers" }).locator("dd");
+  const possible = canadian.locator(".points-breakdown > div").filter({ hasText: "Possible with missing evidence" }).locator("dd");
+  await expect(score).toHaveText("70");
+  await expect(possible).toHaveText("76");
+  await expect(canadian.getByText("All checked conditions met", { exact: true })).toBeVisible();
+
+  await answer("WorkYears").fill("0");
+  await checkProfile(page);
+  await expect(score).toHaveText("61");
+  await expect(canadian.getByText("More information needed", { exact: true })).toBeVisible();
+
+  await answer("WorkYears").fill("1");
+  await checkProfile(page);
+  await expect(score).toHaveText("70");
+  await expect(possible).toHaveText("70");
 });

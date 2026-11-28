@@ -1,6 +1,6 @@
 # 加拿大联邦技术移民入池前核对
 
-本快照为 `ca-express-entry / ca-federal-skilled-worker / 2026-11-28.1`。2026 年 11 月 28 日 UTC 核对官方来源。Git 保留规则及证据版本。独立审核完成且对应快照获批准前，生产仅显示目录。未连接审批数据库的本地开发和自动化测试可预览此快照。
+本快照为 `ca-express-entry / ca-federal-skilled-worker / 2026-11-28.2`。2026 年 11 月 28 日 UTC 核对官方来源。Git 保留规则及证据版本。独立审核完成且对应快照获批准前，生产仅显示目录。未连接审批数据库的本地开发和自动化测试可预览此快照。
 
 | 核对项 | 规则及证据 | 官方来源 |
 | --- | --- | --- |
@@ -10,6 +10,10 @@
 | 安家资金 | 按 IRCC 标注 2025 年 7 月 7 日更新的表核对。七人以上，每增加一人加 4,112 加元。核对可提供证明的资金与家庭人数，或申请人确认符合一般资金豁免。 | [IRCC 资金证明](https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/documents/proof-funds.html) · [IRPR 第 76 条](https://laws-lois.justice.gc.ca/eng/regulations/SOR-2002-227/page-12.html#s-76) |
 
 录用邀请分为已确认符合第 82 条的一般安排就业、未获确认或依赖公共政策、以及已确认没有合格邀请。2026 年 11 月 3 日生效的 LMIA 公共政策适用于符合条件且在当日或之后收到邀请的永久居民申请，规则涉及由 IRCC 审核雇主与岗位证据。依赖该政策的问卷回答保留为待核实。 [IRCC 录用邀请指引](https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/documents/job-offer.html) · [LMIA 公共政策原文](https://www.canada.ca/en/immigration-refugees-citizenship/corporate/mandate/policies-operational-instructions-agreements/public-policies/exempt-lmia-express-entry.html)
+
+已确认主要职业有连续一年合格经验时，即可确认该年对应的 9 分。总年数留空时，较高工作积分仍待核对。若同时填写总年数为 0，两项证据须先核实。
+
+伴侣语言、在加学习和在加工作积分须核实随行和身份要求。家庭人数则须计入配偶或同居伴侣，即使不随行或不符合积分条件。已有伴侣证据且家庭人数填写为 1 时，资金表结果保留为待核实。符合一般资金豁免的情况继续按独立分支核对。
 
 快照引用生效日期明确的法规修订和官方资金表日期。对当前 IRCC 指引未能确定独立生效日期的要求，源记录保留日期为空。按多项积分最低可确认值和最高可能值给出结论。有待确认的例外或文件应留空。问卷仅在当前标签页保留证据概况与金额。
 

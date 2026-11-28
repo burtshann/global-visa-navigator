@@ -1,5 +1,5 @@
 import type { Profile } from "../domain/policy";
-import { caFswEducation, caFswOfferOptions, caFswSkills } from "./ca-federal-skilled-worker";
+import { caFswEducation, caFswOfferOptions, caFswPartnerAdaptability, caFswPartnerOptions, caFswSkills } from "./ca-federal-skilled-worker";
 
 export const de2026MonthlyMeansEur = 1_091;
 
@@ -66,8 +66,15 @@ export function prepareMatchingProfile(profile: Profile): Profile {
     if (answers.caFswOffer === "policy-pending" || !caFswOfferOptions.some(({ value }) => value === answers.caFswOffer)) {
       answers.caFswOffer = undefined;
     }
+    const partnerStatus = answers.caFswPartnerStatus;
+    if (!caFswPartnerOptions.some(({ value }) => value === partnerStatus)) answers.caFswPartnerStatus = undefined;
+    const hasPartner = partnerStatus === "eligible-accompanying" || partnerStatus === "other-partner"
+      || caFswPartnerAdaptability.some(({ id }) => answers[id] === true);
     const familySize = wholeYears(answers.caFswFamilySize, 100_000);
-    answers.caFswFamilySize = familySize === 0 ? undefined : familySize;
+    // Contradictory evidence leaves the threshold unknown until the count is confirmed.
+    answers.caFswConfirmedFamilySize = familySize !== undefined && familySize >= (hasPartner ? 2 : 1)
+      ? familySize
+      : undefined;
     const funds = currencyCents(answers.caFswFundsCad);
     answers.caFswFundsCad = funds === undefined ? undefined : funds / 100;
   }

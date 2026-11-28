@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluatePathway, evaluatePolicy, type Profile } from "../domain/policy";
-import { caFederalSkilledWorkerPolicy, caFswAdaptability } from "./ca-federal-skilled-worker";
+import { caFederalSkilledWorkerPolicy, caFswAdaptability, caFswPartnerAdaptability } from "./ca-federal-skilled-worker";
 import { prepareMatchingProfile } from "./matching-profile";
 
 const date = "2026-11-28";
@@ -18,6 +18,7 @@ const atThreshold = {
   caFswPrimaryWork: true,
   caFswWorkYears: 6,
   caFswOffer: "none",
+  caFswPartnerStatus: "no-partner",
   caFswFamilySize: 1,
   caFswFundsDocumentable: true,
   caFswFundsCad: 15_263,
@@ -88,7 +89,7 @@ describe("Canadian Federal Skilled Worker pre-pool checks", () => {
     const result = check({
       ...Object.fromEntries(caFswAdaptability.map(({ id }) => [id, true])),
       caFswEducation: "doctoral", caFswReading: 9, caFswWriting: 9, caFswListening: 9, caFswSpeaking: 9,
-      caFswSecondLanguage: true, caFswOffer: "ordinary-exempt",
+      caFswSecondLanguage: true, caFswOffer: "ordinary-exempt", caFswPartnerStatus: "eligible-accompanying",
     });
     expect(result.scores?.[0]).toMatchObject({ earned: 100, possible: 100 });
     expect(check({ caFswCanadianStudy: true, caFswCanadianRelative: true }).scores?.[0]).toMatchObject({ earned: 77, possible: 77 });
@@ -112,6 +113,76 @@ describe("Canadian Federal Skilled Worker pre-pool checks", () => {
     expect(check({ ...noFunds, caFswOffer: "ordinary-points" }).status).toBe("conditions-not-met");
     expect(check({ ...noFunds, caFswOffer: "policy-pending" }).status).toBe("profile-incomplete");
   });
+
+  it.each(caFswPartnerAdaptability.map(({ id }) => id))(
+    "requires a consistent family count and valid partner status when %s is claimed",
+    (id) => {
+      const evidence = { caFswReading: 7, caFswWorkYears: 2, [id]: true };
+      const eligible = { ...evidence, caFswPartnerStatus: "eligible-accompanying" };
+      expect(check(eligible)).toMatchObject({
+        status: "profile-incomplete", scores: [{ earned: 67, possible: 67 }],
+        thresholds: [{ minimum: null, status: "unknown" }],
+      });
+      expect(check({ ...eligible, caFswFamilySize: 2, caFswFundsCad: 19_000.99 })).toMatchObject({
+        status: "conditions-not-met", thresholds: [{ minimum: 19_001, status: "fail" }],
+      });
+      expect(check({ ...eligible, caFswFamilySize: 2, caFswFundsCad: 19_001 })).toMatchObject({
+        status: "conditions-met", scores: [{ earned: 67, possible: 67 }],
+        thresholds: [{ minimum: 19_001, status: "pass" }],
+      });
+
+      const ineligible = { ...evidence, caFswPartnerStatus: "other-partner" };
+      expect(check(ineligible).thresholds?.[0]).toMatchObject({ minimum: null, status: "unknown" });
+      expect(check({ ...ineligible, caFswFamilySize: 2, caFswFundsCad: 19_001 })).toMatchObject({
+        status: "conditions-not-met", scores: [{ earned: 62, possible: 62 }],
+        thresholds: [{ minimum: 19_001, status: "pass" }],
+      });
+
+      const unknown = { ...evidence, caFswPartnerStatus: undefined };
+      expect(check(unknown).thresholds?.[0]).toMatchObject({ minimum: null, status: "unknown" });
+      expect(check({ ...unknown, caFswFamilySize: 2, caFswFundsCad: 19_001 })).toMatchObject({
+        status: "profile-incomplete", scores: [{ earned: 62, possible: 67 }],
+        thresholds: [{ minimum: 19_001, status: "pass" }],
+      });
+      expect(check({ ...eligible, caFswOffer: "ordinary-exempt" })).toMatchObject({
+        status: "conditions-met", thresholds: [{ minimum: null, status: "unknown" }],
+      });
+    },
+  );
+
+  it("includes a known partner in the funds check regardless of claimed adaptability points", () => {
+    for (const caFswPartnerStatus of ["eligible-accompanying", "other-partner"]) {
+      const withPartner = check({ caFswPartnerStatus });
+      expect(withPartner).toMatchObject({
+        status: "profile-incomplete", thresholds: [{ minimum: null, status: "unknown" }],
+      });
+    }
+    expect(check({ caFswPartnerLanguage: true }).thresholds?.[0]).toMatchObject({ minimum: null, status: "unknown" });
+  });
+
+  const educationAndLanguage = {
+    caFswEducation: "doctoral", caFswReading: 9, caFswWriting: 9, caFswListening: 9, caFswSpeaking: 9,
+  };
+  it("credits a confirmed primary work year without fixing the upper bound of a blank total", () => {
+    expect(check({ ...educationAndLanguage, caFswWorkYears: undefined })).toMatchObject({
+      status: "conditions-met", scores: [{ earned: 70, possible: 76 }],
+    });
+    expect(check({ ...educationAndLanguage, caFswWorkYears: 0 })).toMatchObject({
+      status: "profile-incomplete", scores: [{ earned: 61, possible: 76 }],
+    });
+    expect(check({ ...educationAndLanguage, caFswPrimaryWork: false, caFswWorkYears: undefined })).toMatchObject({
+      status: "conditions-not-met", scores: [{ earned: 61, possible: 76 }],
+    });
+  });
+
+  it.each([[1, 70], [2, 72], [4, 74], [6, 76]])(
+    "scores a confirmed total of %s qualifying years without double-counting the primary year",
+    (caFswWorkYears, points) => {
+      expect(check({ ...educationAndLanguage, caFswWorkYears }).scores?.[0]).toMatchObject({
+        earned: points, possible: points,
+      });
+    },
+  );
 
   it("withholds checks before the snapshot’s evidence verification date", () => {
     expect(check({}, "2026-11-27").status).toBe("rules-not-covered");

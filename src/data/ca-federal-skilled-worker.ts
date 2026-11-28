@@ -46,17 +46,33 @@ export const caFswSkills = [
   { id: "Speaking", label: t("Speaking", "口语") },
 ] as const;
 
+const reviewedAt = "2026-11-28T06:01:43Z";
+const partnerScope = t(
+  "These points require an accompanying spouse or common-law partner who is neither a Canadian citizen nor a permanent resident residing in Canada.",
+  "此类积分须有随行配偶或同居伴侣，且对方须既非加拿大公民，也非居住在加拿大的永久居民。",
+);
+
+export const caFswPartnerOptions = [
+  { value: "no-partner", label: t("I have no spouse or common-law partner", "我没有配偶或同居伴侣") },
+  { value: "eligible-accompanying", label: t("I have an accompanying partner who meets the status requirements below", "我有符合下方身份要求的随行伴侣") },
+  { value: "other-partner", label: t("My partner is not accompanying me or is excluded by the status requirements below", "我的伴侣不随行，或其身份不符合下方要求") },
+] as const;
+
+export const caFswPartnerAdaptability = [
+  { id: "caFswPartnerLanguage", points: 5, label: t("My accompanying partner has CLB or NCLC 4 or higher in all four skills", "我的随行伴侣听说读写均达到 CLB 或 NCLC 4 级或以上"),
+    evidence: t(`${partnerScope.en} Use approved English or French test results less than two years old.`, `${partnerScope.zh}须提供未满两年的认可英语或法语考试成绩。`) },
+  { id: "caFswPartnerStudy", points: 5, label: t("My accompanying partner completed at least two qualifying academic years in Canada", "我的随行伴侣在加拿大完成至少两个符合条件的学年"),
+    evidence: t(`${partnerScope.en} Apply the same authorised study requirements as for the applicant.`, `${partnerScope.zh}适用与主申请人相同的合法就读要求。`) },
+  { id: "caFswPartnerWork", points: 5, label: t("My accompanying partner completed at least one year of qualifying work in Canada", "我的随行伴侣在加拿大完成至少一年符合条件的工作"),
+    evidence: t(`${partnerScope.en} Count full-time work in Canada under a work permit or authorised under IRPR 186.`, `${partnerScope.zh}仅计持工签或依《条例》第 186 条获准在加拿大从事的全职工作。`) },
+] as const;
+
 export const caFswAdaptability = [
   { id: "caFswCanadianWork", points: 10, label: t("I completed at least one year of qualifying work in Canada", "我在加拿大完成至少一年符合条件的工作"),
     evidence: t("Full-time authorised work in Canada in TEER 0–3. Check employer letters and work authorisation.", "在加拿大获准从事 TEER 0–3 的全职工作。核对雇主证明与工作授权。") },
   { id: "caFswCanadianStudy", points: 5, label: t("I completed at least two qualifying academic years in Canada", "我在加拿大完成至少两个符合条件的学年"),
     evidence: t("Authorised study in a recognised program of at least two years, at least 15 hours of instruction a week, and good academic standing.", "在获认可的至少两年制课程中合法就读，每周至少 15 小时授课，并保持良好学业状态。") },
-  { id: "caFswPartnerLanguage", points: 5, label: t("My accompanying partner has CLB or NCLC 4 or higher in all four skills", "我的随行伴侣听说读写均达到 CLB 或 NCLC 4 级或以上"),
-    evidence: t("Current results from an approved English or French test for an accompanying spouse or common-law partner who is neither a Canadian citizen nor a permanent resident residing in Canada.", "适用于随行且非加拿大公民或居住在加拿大的永久居民的配偶或同居伴侣，须提供认可且有效的英语或法语考试成绩。") },
-  { id: "caFswPartnerStudy", points: 5, label: t("My accompanying partner completed at least two qualifying academic years in Canada", "我的随行伴侣在加拿大完成至少两个符合条件的学年"),
-    evidence: t("The same authorised study conditions as for the applicant apply to an eligible accompanying spouse or common-law partner.", "符合条件的随行配偶或同居伴侣适用与主申请人相同的合法就读要求。") },
-  { id: "caFswPartnerWork", points: 5, label: t("My accompanying partner completed at least one year of qualifying work in Canada", "我的随行伴侣在加拿大完成至少一年符合条件的工作"),
-    evidence: t("Full-time authorised Canadian work by an eligible accompanying spouse or common-law partner.", "符合条件的随行配偶或同居伴侣在加拿大合法从事全职工作。") },
+  ...caFswPartnerAdaptability,
   { id: "caFswCanadianRelative", points: 5, label: t("I or my accompanying partner have a qualifying relative in Canada", "我或随行伴侣在加拿大有符合条件的亲属"),
     evidence: t("A parent, grandparent, child, grandchild, sibling, aunt, uncle, niece or nephew aged 18 or older, residing in Canada as a citizen or permanent resident.", "年满 18 岁、居住在加拿大的公民或永久居民，且是父母、祖父母或外祖父母、子女、孙辈、兄弟姐妹、叔伯姑舅姨或侄甥。") },
 ] as const;
@@ -122,12 +138,17 @@ const educationConditions: Condition[] = caFswEducation.map(({ value, label }) =
 }));
 
 const workBands = [{ years: 1, points: 9 }, { years: 2, points: 11 }, { years: 4, points: 13 }, { years: 6, points: 15 }];
+const workSource = {
+  ...source(irpr(80), t("Skilled work experience selection points under IRPR 80.", "《条例》第 80 条技术工作经验积分。"),
+    t("Check NOC TEER 0–3, duties, paid status, dates and full-time equivalent hours against IRCC evidence rules. Qualifying work in the primary occupation under section 75 counts toward these same bands.", "按 IRCC 证据要求核对 NOC TEER 0–3、职责、带薪状态、日期及全职等效工时。符合第 75 条的主要职业经验计入相同档次。"),
+    "2023-11-24", workHoursAmendment),
+  lastVerifiedAt: reviewedAt,
+};
 const workConditions: Condition[] = workBands.map(({ years }) => ({
   id: `caFswWork-${years}`, input: "answer:caFswWorkYears", operator: "gte", expected: years,
   label: t(`At least ${years} full years of qualifying skilled work`, `至少 ${years} 整年合格技术工作经验`),
-  nextStep: t("Count documented qualifying work in the 10-year window, excluding overlap.", "仅计算十年期内有证明的合格工作，重叠时段不得重复计入。"),
-  source: source(irpr(80), t("Skilled work experience selection points under IRPR 80.", "《条例》第 80 条技术工作经验积分。"),
-    t("Check NOC TEER 0–3, duties, paid status, dates and full-time equivalent hours against IRCC evidence rules.", "按 IRCC 证据要求核对 NOC TEER 0–3、职责、带薪状态、日期及全职等效工时。"), "2023-11-24", workHoursAmendment),
+  nextStep: t("Count documented qualifying work in the 10-year window, including the qualifying primary occupation year. Exclude overlap.", "计算十年期内有证明的合格工作，包括主要职业的合格年限。重叠时段不得重复计入。"),
+  source: workSource,
 }));
 
 const ageSource = grid(81, t("Age at the date the application is made, IRPR 81.", "《条例》第 81 条，以提交申请日年龄计算。"),
@@ -156,13 +177,28 @@ const exemptOffer: Condition = {
   source: source(irpr(76), t("IRCC proof-of-funds guidance and IRPR 76(1)(b)(ii), with arranged employment under 82(2)(a), (b) or (d).", "IRCC 资金证明指引及《条例》第 76(1)(b)(ii) 条，安排就业适用第 82(2)(a)、(b) 或 (d) 条。"),
     t("Confirm current Canadian work authorisation and which ordinary arranged employment paragraph awards points.", "核实当前加拿大工作授权及适用的一般安排就业积分条款。"), "2013-05-04", gridAmendment),
 };
+const partnerEligibility: Condition = {
+  id: "caFswPartnerEligibility", input: "answer:caFswPartnerStatus", operator: "eq", expected: "eligible-accompanying",
+  label: t("Partner meets the accompanying and status requirements for these adaptability points", "伴侣符合此类适应能力积分的随行和身份要求"),
+  nextStep: t("Confirm whether your spouse or common-law partner is accompanying you and meets the status requirements.", "核对配偶或同居伴侣是否随行并符合身份要求。"),
+  source: {
+    ...source(irpr(83), t("Partner language, study and work under IRPR 83(1)(a), (b.1) and (c.1).", "《条例》第 83(1)(a)、(b.1) 及 (c.1) 条规定的伴侣语言、学习及工作积分。"),
+      partnerScope, "2013-05-04", gridAmendment),
+    lastVerifiedAt: reviewedAt,
+  },
+};
 const adaptability = caFswAdaptability.map(({ id, label, evidence }) => fact(id, label,
   t("Check the corresponding evidence and definitions under IRPR 83.", "按《条例》第 83 条核对相应证明及定义。"),
-  source(irpr(83), t("Federal Skilled Worker adaptability, IRPR 83.", "《条例》第 83 条联邦技术移民适应能力。"), evidence, "2022-11-16", nocAmendment)));
+  caFswPartnerAdaptability.some((partner) => partner.id === id)
+    ? { ...partnerEligibility.source, evidence }
+    : source(irpr(83), t("Federal Skilled Worker adaptability, IRPR 83.", "《条例》第 83 条联邦技术移民适应能力。"), evidence, "2022-11-16", nocAmendment)));
 
-const fundsSource = source(fundsUrl, t("Published Express Entry funds table for Federal Skilled Workers and IRPR 76(1)(b).", "适用于联邦技术移民的快速通道资金表及《条例》第 76(1)(b) 条。"),
-  t("Use available, transferable funds free of debts or other obligations. Official financial institution letters are required. Count the applicant, spouse or partner and dependent children even if they will stay behind or are citizens or permanent residents.", "仅计可用、可转移且不受债务或其他义务限制的资金，须提供金融机构正式证明。家庭人数包括本人、配偶或伴侣和受抚养子女，即使他们不随行或已是加拿大公民或永久居民。"),
-  "2025-07-07", fundsUrl);
+const fundsSource = {
+  ...source(fundsUrl, t("Published Express Entry funds table for Federal Skilled Workers and IRPR 76(1)(b).", "适用于联邦技术移民的快速通道资金表及《条例》第 76(1)(b) 条。"),
+    t("Use available, transferable funds free of debts or other obligations. Official financial institution letters are required. Count the applicant, spouse or common-law partner and dependent children even if they will stay behind or are citizens or permanent residents.", "仅计可用、可转移且不受债务或其他义务限制的资金，须提供金融机构正式证明。家庭人数包括本人、配偶或同居伴侣和受抚养子女，即使他们不随行或已是加拿大公民或永久居民。"),
+    "2025-07-07", fundsUrl),
+  lastVerifiedAt: reviewedAt,
+};
 const fundsAvailable = fact("caFswFundsDocumentable",
   t("Funds are available, unencumbered and documentable", "资金可用、无负担且能够提供证明"),
   t("Review IRCC’s accepted proof and ask your financial institutions for the required documentation.", "查看 IRCC 接受的证据，并向金融机构索取所需证明。"), fundsSource);
@@ -171,9 +207,12 @@ const ref = ({ id }: Condition): RuleExpression => ({ kind: "condition", conditi
 const any = (children: readonly RuleExpression[]): RuleExpression => ({ kind: "any", children });
 const all = (children: readonly RuleExpression[]): RuleExpression => ({ kind: "all", children });
 
-const fivePointFacts = [...adaptability.slice(1), ordinaryOffer];
+const fivePointFacts = [...adaptability.slice(1), ordinaryOffer].map((condition) =>
+  caFswPartnerAdaptability.some(({ id }) => id === condition.id)
+    ? all([ref(partnerEligibility), ref(condition)])
+    : ref(condition));
 const combinations = fivePointFacts.flatMap((left, index) =>
-  fivePointFacts.slice(index + 1).map((right) => all([ref(left), ref(right)])));
+  fivePointFacts.slice(index + 1).map((right) => all([left, right])));
 
 const categories: ScoreCategory[] = [
   { id: "age", alternatives: ageConditions.map((condition, index) => ({ points: 12 - index, when: ref(condition) })) },
@@ -183,16 +222,19 @@ const categories: ScoreCategory[] = [
     alternatives: levels.map((condition, levelIndex) => ({ points: 4 + levelIndex, when: all([ref(firstTest), ref(condition)]) })),
   })),
   { id: "second-language", alternatives: [{ points: 4, when: ref(secondLanguage) }] },
-  { id: "experience", alternatives: workConditions.map((condition, index) => ({ points: workBands[index].points, when: ref(condition) })) },
+  { id: "experience", alternatives: workConditions.map((condition, index) => ({
+    points: workBands[index].points,
+    when: index === 0 ? any([ref(primaryWork), ref(condition)]) : ref(condition),
+  })) },
   { id: "arranged-employment", alternatives: [{ points: 10, when: ref(ordinaryOffer) }] },
   { id: "adaptability", alternatives: [
-    { points: 5, when: any(fivePointFacts.map(ref)) },
+    { points: 5, when: any(fivePointFacts) },
     { points: 10, when: any([ref(adaptability[0]), ...combinations]) },
   ] },
 ];
 
 export const caFederalSkilledWorkerPolicy = {
-  id: "ca-federal-skilled-worker", version: "2026-11-28.1", stage: "application",
+  id: "ca-federal-skilled-worker", version: "2026-11-28.2", stage: "application",
   name: t("Federal Skilled Worker Program", "联邦技术移民项目"),
   assessmentLabel: t("Federal Skilled Worker pre-pool checks", "联邦技术移民入池前核对"),
   scope: t("Checks the ordinary minimum requirements and 67-of-100 selection grid using your answers. IRCC still has to verify evidence, admissibility, any discretionary assessments and actual entry to the pool.",
@@ -200,18 +242,18 @@ export const caFederalSkilledWorkerPolicy = {
   conditions: [
     outsideQuebec, primaryWork, firstTest, ...firstLevels.flat(), secondLanguage, educationMinimum,
     ...educationConditions, ...workConditions, ...ageConditions, ordinaryOffer, exemptOffer,
-    ...adaptability, fundsAvailable,
+    partnerEligibility, ...adaptability, fundsAvailable,
   ],
   expression: all([
     ref(outsideQuebec), ref(primaryWork), ref(firstTest), ...firstLevels.map(([minimum]) => ref(minimum)),
     ref(educationMinimum),
     any([ref(exemptOffer), all([ref(fundsAvailable), {
       kind: "threshold-table", id: "caFswFundThreshold", input: "answer:caFswFundsCad",
-      bandInput: "answer:caFswFamilySize", categoryInput: "answer:caFswFundsDocumentable",
+      bandInput: "answer:caFswConfirmedFamilySize", categoryInput: "answer:caFswFundsDocumentable",
       bandStarts: [1, 2, 3, 4, 5, 6, 7], maximumBandInput: 100_000, incrementAboveLastBand: 4112,
       categories: [{ value: true, minimums: [15263, 19001, 23360, 28362, 32168, 36280, 40392] }],
       unit: t("CAD", "加元"), label: t("Documentable settlement funds meet the family-size minimum", "可证明的安家资金达到相应家庭人数的最低金额"),
-      nextStep: t("Check the current IRCC table, including extra funds for each person beyond seven.", "查阅 IRCC 当前资金表，包括第七人之后每增加一人的金额。"),
+      nextStep: t("Confirm your family size. Count yourself and your spouse or common-law partner, even if they are not accompanying you, plus dependent children. Then check the IRCC funds table.", "核对家庭人数。计入本人、配偶或同居伴侣（即使不随行）及受抚养子女，再查阅 IRCC 资金表。"),
       source: fundsSource,
     }])]),
     {

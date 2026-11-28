@@ -202,6 +202,7 @@ export function getRuleQuestionGroups(routes: readonly Route[]): QuestionGroup[]
       inputs.add("answer:deContractNetEurMonthly");
       inputs.add("answer:deBlockedEurMonthly");
     }
+    if (inputs.has("answer:caFswConfirmedFamilySize")) inputs.add("answer:caFswFamilySize");
     const fields = orderedInputs.flatMap((input) => {
       if (!inputs.has(input) || seen.has(input)) return [];
       seen.add(input);
